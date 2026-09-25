@@ -1,0 +1,169 @@
+import fs from "node:fs";
+const dir = "public/brand";
+const flower = (color = "#203d32") =>
+  `<g fill="${color}">${Array.from({ length: 6 }, (_, i) => {
+    const a = (i * Math.PI) / 3;
+    return `<circle cx="${64 + Math.cos(a) * 28}" cy="${64 + Math.sin(a) * 28}" r="18"/>`;
+  }).join(
+    "",
+  )}<circle cx="64" cy="64" r="19"/></g><circle cx="64" cy="64" r="10" fill="#d9ef87"/>`;
+const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="30" fill="#d9ef87"/>${flower()}</svg>`;
+fs.writeFileSync(`${dir}/icon.svg`, icon);
+fs.writeFileSync("app/icon.svg", icon);
+fs.writeFileSync(
+  `${dir}/avatar.svg`,
+  `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 128 128"><rect width="128" height="128" fill="#203d32"/><g transform="translate(12 12) scale(.8125)">${flower("#d9ef87").replace('r="10" fill="#d9ef87"', 'r="10" fill="#203d32"')}</g></svg>`,
+);
+for (const [name, ink, dot] of [
+  ["wordmark", "#203d32", "#8dba5e"],
+  ["wordmark-light", "#f6f5f0", "#d9ef87"],
+])
+  fs.writeFileSync(
+    `${dir}/${name}.svg`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="680" height="190" viewBox="0 0 680 190" role="img" aria-label="PinDou"><text x="16" y="150" font-family="Avenir Next,Arial Rounded MT Bold,Arial,sans-serif" font-size="162" letter-spacing="-10" font-weight="800" fill="${ink}">pindou</text><circle cx="596" cy="140" r="12" fill="${dot}"/><g transform="translate(100 0) scale(.28)">${flower(ink)}</g></svg>`,
+  );
+const src = fs.readFileSync("lib/presets.ts", "utf8");
+const frog = JSON.parse(
+  `[${src
+    .match(/const frog = \[([\s\S]*?)\n\];/)[1]
+    .trim()
+    .replace(/,$/, "")}]`,
+);
+const map = {
+  G: "#48952f",
+  W: "#f7f4eb",
+  K: "#303732",
+  P: "#f47caa",
+  L: "#b9d967",
+};
+let art = "";
+frog.forEach((row, y) =>
+  [...row].forEach((c, x) => {
+    if (map[c])
+      art += `<g transform="translate(${x * 30 + 20},${y * 30 + 20})"><circle r="14" fill="${map[c]}"/><circle cy="2" r="13" fill="none" stroke="#14220e" stroke-opacity=".15" stroke-width="2"/><circle cy="-1" r="5" fill="#203d32" fill-opacity=".45"/><path d="M-9-7A12 12 0 0 1 7-9" fill="none" stroke="white" stroke-opacity=".45" stroke-width="2"/></g>`;
+  }),
+);
+fs.writeFileSync(
+  `${dir}/pocket-frog.svg`,
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 580">${art}</svg>`,
+);
+const posts = [
+  [
+    "01-meet-pindou",
+    "feed",
+    "intro",
+    "MEET PINDOU",
+    "Little things.<br>Big good days.",
+    "Your little corner of color, creativity<br>and just-one-more-bead.",
+  ],
+  [
+    "02-better-together",
+    "feed",
+    "coop",
+    "MAKE ROOM FOR A FRIEND",
+    "One board.<br>Two imaginations.",
+    "Build together. Swap a bead.<br>See where the happy accidents go.",
+  ],
+  [
+    "03-pick-place-play",
+    "feed",
+    "how",
+    "YOUR FIRST LITTLE CREATION",
+    "Pick.<br>Place.<br>Play.",
+    "Drag a color onto a peg.<br>That’s a very good beginning.",
+  ],
+  [
+    "04-happy-accidents",
+    "feed",
+    "mess",
+    "PERMISSION TO PLAY",
+    "A little mess.<br>A lot of joy.",
+    "Shuffle the boxes. Spill the beads.<br>Make something unexpected.",
+  ],
+  [
+    "05-pocket-frog",
+    "feed",
+    "frog",
+    "THE POCKET FROG CHALLENGE",
+    "Make a tiny<br>good mood.",
+    "Start with our Pocket frog template.<br>Give it your own colors.",
+  ],
+  [
+    "06-palette-date",
+    "feed",
+    "palette",
+    "PICK YOUR LITTLE PALETTE",
+    "What color<br>is your day?",
+    "Leaf green. Bubblegum. Sunshine.<br>We’re feeling all three.",
+  ],
+  [
+    "07-story-intro",
+    "vertical",
+    "intro",
+    "SMALL BEADS. BIG GOOD DAYS.",
+    "Your next<br>little obsession.",
+    "A playful digital bead studio.<br>Meet PinDou.",
+  ],
+  [
+    "08-tiktok-coop-cover",
+    "vertical",
+    "coop",
+    "MAKE SOMETHING TOGETHER",
+    "Your friend.<br>Your board.<br>Happy chaos.",
+    "Co-op bead play, the PinDou way.",
+  ],
+  [
+    "09-tiktok-frog-cover",
+    "vertical",
+    "frog",
+    "ONE BEAD AT A TIME",
+    "POV: one more<br>bead becomes<br>a tiny frog.",
+    "A little patience. A little color.",
+  ],
+  [
+    "10-story-palette",
+    "vertical",
+    "palette",
+    "TODAY’S COLOR CHECK",
+    "Choose your<br>good mood.",
+    "Green, pink or yellow?<br>Add an Instagram poll when posting.",
+  ],
+  [
+    "github-banner",
+    "banner",
+    "banner",
+    "A PLAYFUL 3D BEAD STUDIO",
+    "Little things,<br>made together.",
+    "Create. Co-op. A little happy chaos.",
+  ],
+  ["avatar", "avatar", "avatar", "", "", ""],
+];
+fs.writeFileSync(
+  `${dir}/assets.json`,
+  JSON.stringify(
+    posts.map(([id, format, theme, eyebrow, title, sub]) => ({
+      id,
+      format,
+      theme,
+      eyebrow,
+      title,
+      sub,
+    })),
+    null,
+    2,
+  ),
+);
+const html = `<!doctype html><html lang="en"><meta charset="utf-8"><title>PinDou · Social templates</title><style>
+*{box-sizing:border-box}body{margin:0;background:#deded6;color:#203d32;font-family:'Avenir Next',Arial,sans-serif}.card{width:1080px;height:1350px;position:relative;overflow:hidden;background:#f6f5f0}.card.vertical{height:1920px}.card.banner{width:1200px;height:630px}.card.avatar{height:1080px}.top{position:absolute;left:78px;right:78px;top:60px;display:flex;justify-content:space-between;align-items:center;z-index:3}.logo{width:228px;height:auto}.edition{font-size:18px;letter-spacing:3px;font-weight:600}.copy{position:absolute;left:82px;top:238px;right:70px;z-index:2}.eyebrow{font-size:18px;letter-spacing:3px;font-weight:600;margin:0 0 22px}h1{font-size:96px;font-weight:750;line-height:1.02;letter-spacing:-6px;margin:0}p{font-size:29px;line-height:1.5;margin:28px 0 0;letter-spacing:-.4px}.bottom{position:absolute;bottom:55px;left:82px;right:82px;display:flex;align-items:center;justify-content:space-between;z-index:3;font-size:18px;letter-spacing:.2px}.bottom b{font-weight:600}.pill{border:1px solid currentColor;border-radius:50px;padding:13px 20px;font-size:15px;letter-spacing:1px}.art{position:absolute;width:100%;height:100%;object-fit:cover;inset:0}.intro .copy{top:200px}.intro h1{font-size:87px}.intro p{font-size:25px}.intro .art{top:340px;height:980px;object-position:center bottom}.intro:after{content:'';position:absolute;top:320px;left:0;right:0;height:110px;background:linear-gradient(#f6f5f0,transparent)}.intro .bottom{background:#f6f5f0e8;padding:13px 18px;border-radius:14px;left:64px;right:64px}.coop{background:#d9ef87}.coop h1{font-size:102px}.coop .copy{top:225px}.coop-art{position:absolute;top:625px;left:90px;right:90px;height:515px}.board{position:absolute;width:410px;height:410px;background:#f9faf0;border:1px solid #bbcaaa;border-radius:32px;box-shadow:0 15px 0 #a3bc68,0 40px 40px #2c4c2222;transform:rotate(-9deg);left:225px;top:30px;background-image:radial-gradient(#c4cdb6 2px,transparent 3px);background-size:20px 20px}.board img{width:85%;margin:8%}.cursor{position:absolute;padding:17px 24px;border-radius:26px 26px 26px 0;background:#f4a8c1;color:#66384a;font-size:23px;box-shadow:0 7px 0 #c2869c33;z-index:3;left:70px;top:125px;rotate:-7deg}.cursor.second{background:#f6c842;left:auto;right:10px;top:330px;rotate:7deg}.how{background:#203d32;color:#f6f5f0}.how h1{font-size:158px;line-height:1.03}.how .copy{top:220px}.how .eyebrow{color:#d9ef87}.beads{position:absolute;display:flex;gap:25px;align-items:center}.bead{width:170px;height:170px;background:radial-gradient(circle at 48% 43%,#203d3260 0 22%,transparent 24%),radial-gradient(circle at 32% 24%,#ffffff66,transparent 70%),var(--color);border-radius:50%;box-shadow:inset -12px -18px 3px #0002,inset 7px 7px 2px #fff5,7px 25px 0 #0002,15px 38px 25px #0002}.how .beads{right:100px;top:680px;flex-direction:column;rotate:15deg}.how p{margin-top:60px;font-size:27px}.mess{background:#f2d8df}.mess h1{font-size:105px}.mess .beads{left:100px;top:720px;gap:45px;rotate:-12deg}.mess .bead:nth-child(2){translate:0 115px}.mess .bead:nth-child(3){translate:0 -70px}.scatter{position:absolute;top:1060px;left:530px;rotate:23deg}.scatter .bead{width:88px;height:88px}.frog{background:#eaf0df}.frog .frog-art{position:absolute;width:620px;top:580px;left:230px;rotate:-8deg;filter:drop-shadow(12px 22px 0 #4a6b2722)}.frog h1{font-size:100px}.palette .copy{top:220px}.palette h1{font-size:109px}.palette .beads{top:735px;left:150px;right:150px;justify-content:space-between;gap:35px}.labels{position:absolute;top:975px;left:110px;right:110px;display:flex;justify-content:space-around;font-size:23px;font-weight:600}.vertical .top{top:130px}.vertical .copy{top:350px}.vertical h1{font-size:100px}.vertical .bottom{bottom:200px}.vertical .coop-art{top:1020px}.vertical .frog-art{top:1020px;width:650px;left:215px}.vertical.intro .art{top:500px;height:1220px}.vertical.intro:after{top:510px;height:190px}.vertical.intro .copy{top:315px}.vertical.palette .beads{top:1140px}.vertical.palette .labels{top:1380px}.banner .top{left:70px;top:45px;right:65px}.banner .copy{left:70px;top:220px;width:620px}.banner h1{font-size:68px;letter-spacing:-3px}.banner p{font-size:22px;margin-top:20px}.banner .eyebrow{font-size:14px}.banner .bottom{bottom:35px;left:70px;font-size:12px}.banner .frog-art{position:absolute;right:45px;top:140px;width:400px;rotate:7deg}.banner .pill{display:none}.avatar .top,.avatar .copy,.avatar .bottom{display:none}.avatar>img{width:1080px;height:1080px}
+.intro .art{top:560px;left:64px;width:952px;height:710px;border-radius:28px;object-fit:cover;object-position:center 65%}.intro:after{display:none}.vertical.intro .art{top:790px;height:930px}
+</style><div id="root"></div><script>
+const assets=${JSON.stringify(posts)};
+const id=new URLSearchParams(location.search).get('asset')||assets[0][0];
+const a=assets.find(p=>p[0]===id)||assets[0];const [_,format,theme,eyebrow,title,sub]=a;
+const beads='<div class="beads"><i class="bead" style="--color:#48952f"></i><i class="bead" style="--color:#f47caa"></i><i class="bead" style="--color:#f6c842"></i></div>';
+let art=theme==='intro'?'<img class="art" src="campaign-art.png" alt="Illustrative bead frog and trays">':theme==='coop'?'<div class="coop-art"><div class="board"><img src="pocket-frog.svg" alt="Pocket frog"></div><div class="cursor">you ↘</div><div class="cursor second">your friend ↖</div></div>':['frog','banner'].includes(theme)?'<img class="frog-art" src="pocket-frog.svg" alt="Pocket frog template">':theme==='avatar'?'<img src="avatar.svg" alt="PinDou avatar">':beads;
+if(theme==='mess')art+='<div class="scatter"><i class="bead" style="--color:#f47caa"></i></div>';
+if(theme==='palette')art+='<div class="labels"><span>Leaf green</span><span>Bubblegum</span><span>Sunshine</span></div>';
+document.getElementById('root').innerHTML='<article class="card '+format+' '+theme+'"><div class="top"><img class="logo" src="'+(theme==='how'?'wordmark-light.svg':'wordmark.svg')+'" alt="PinDou"><span class="edition">PLAY A LITTLE.</span></div><div class="copy"><div class="eyebrow">'+eyebrow+'</div><h1>'+title+'</h1><p>'+sub+'</p></div>'+art+'<div class="bottom"><b>A digital bead studio · in development</b><span class="pill">SMALL BEADS. BIG GOOD DAYS.</span></div></article>';
+</script></html>`;
+fs.writeFileSync(`${dir}/social-source.html`, html);

@@ -1,0 +1,98 @@
+[
+  {
+    "id": "01-meet-pindou",
+    "format": "feed",
+    "theme": "intro",
+    "eyebrow": "MEET PINDOU",
+    "title": "Little things.<br>Big good days.",
+    "sub": "Your little corner of color, creativity<br>and just-one-more-bead."
+  },
+  {
+    "id": "02-better-together",
+    "format": "feed",
+    "theme": "coop",
+    "eyebrow": "MAKE ROOM FOR A FRIEND",
+    "title": "One board.<br>Two imaginations.",
+    "sub": "Build together. Swap a bead.<br>See where the happy accidents go."
+  },
+  {
+    "id": "03-pick-place-play",
+    "format": "feed",
+    "theme": "how",
+    "eyebrow": "YOUR FIRST LITTLE CREATION",
+    "title": "Pick.<br>Place.<br>Play.",
+    "sub": "Drag a color onto a peg.<br>That’s a very good beginning."
+  },
+  {
+    "id": "04-happy-accidents",
+    "format": "feed",
+    "theme": "mess",
+    "eyebrow": "PERMISSION TO PLAY",
+    "title": "A little mess.<br>A lot of joy.",
+    "sub": "Shuffle the boxes. Spill the beads.<br>Make something unexpected."
+  },
+  {
+    "id": "05-pocket-frog",
+    "format": "feed",
+    "theme": "frog",
+    "eyebrow": "THE POCKET FROG CHALLENGE",
+    "title": "Make a tiny<br>good mood.",
+    "sub": "Start with our Pocket frog template.<br>Give it your own colors."
+  },
+  {
+    "id": "06-palette-date",
+    "format": "feed",
+    "theme": "palette",
+    "eyebrow": "PICK YOUR LITTLE PALETTE",
+    "title": "What color<br>is your day?",
+    "sub": "Leaf green. Bubblegum. Sunshine.<br>We’re feeling all three."
+  },
+  {
+    "id": "07-story-intro",
+    "format": "vertical",
+    "theme": "intro",
+    "eyebrow": "SMALL BEADS. BIG GOOD DAYS.",
+    "title": "Your next<br>little obsession.",
+    "sub": "A playful digital bead studio.<br>Meet PinDou."
+  },
+  {
+    "id": "08-tiktok-coop-cover",
+    "format": "vertical",
+    "theme": "coop",
+    "eyebrow": "MAKE SOMETHING TOGETHER",
+    "title": "Your friend.<br>Your board.<br>Happy chaos.",
+    "sub": "Co-op bead play, the PinDou way."
+  },
+  {
+    "id": "09-tiktok-frog-cover",
+    "format": "vertical",
+    "theme": "frog",
+    "eyebrow": "ONE BEAD AT A TIME",
+    "title": "POV: one more<br>bead becomes<br>a tiny frog.",
+    "sub": "A little patience. A little color."
+  },
+  {
+    "id": "10-story-palette",
+    "format": "vertical",
+    "theme": "palette",
+    "eyebrow": "TODAY’S COLOR CHECK",
+    "title": "Choose your<br>good mood.",
+    "sub": "Green, pink or yellow?<br>Add an Instagram poll when posting."
+  },
+  {
+    "id": "github-banner",
+    "format": "banner",
+    "theme": "banner",
+    "eyebrow": "A PLAYFUL 3D BEAD STUDIO",
+    "title": "Little things,<br>made together.",
+    "sub": "Create. Co-op. A little happy chaos."
+  },
+  {
+    "id": "avatar",
+    "format": "avatar",
+    "theme": "avatar",
+    "eyebrow": "",
+    "title": "",
+    "sub": ""
+  }
+]
