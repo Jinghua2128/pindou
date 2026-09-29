@@ -7,7 +7,12 @@ export async function POST(request: Request) {
   try {
     const { project, toys } = createRoomSchema.parse(await roomBody(request));
     const id = createRoom(project, toys);
-    const url = new URL(request.url);
+    const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const url = new URL(
+      configuredUrl && new URL(configuredUrl).protocol === "https:"
+        ? configuredUrl
+        : request.url,
+    );
     // A localhost link cannot open on a friend's device. Offer this host's LAN address.
     if (["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
       const lan = Object.values(networkInterfaces())

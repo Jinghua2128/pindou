@@ -8,7 +8,7 @@ import {
   applyOperation,
   toyDiff,
   type Operation,
-  type RoomSnapshot,
+  type RoomSyncResponse,
 } from "@/lib/co-op";
 
 export function useCoop(roomId: string | undefined, ready: boolean) {
@@ -28,6 +28,8 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
     let baseProject = useEditor.getState().project,
       baseToys = usePlay.getState().toys;
     let pending: Operation[] = [];
+    let version: number | undefined;
+    let authoritative = { project: baseProject, toys: baseToys };
     let timer: ReturnType<typeof setTimeout>;
     const controller = new AbortController();
     usePlay.setState({
@@ -87,6 +89,7 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
               holding: play.held?.color ?? null,
             },
             operations: sent,
+            since: version,
           }),
         });
         if (!alive) return;
@@ -99,16 +102,19 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
           if ([400, 404, 410].includes(response.status)) return;
           throw new Error("Connection interrupted");
         }
-        const snapshot: RoomSnapshot = await response.json();
+        const snapshot: RoomSyncResponse = await response.json();
         // Never replace a half-finished brush stroke. Tray drags can stream live.
         while (alive && editing())
           await new Promise((resolve) => setTimeout(resolve, 50));
         if (!alive) return;
         if (initialized && useEditor.getState().project.id !== baseProject.id)
           return;
-        collect();
         pending = pending.filter((op) => !sent.some((s) => s.seq === op.seq));
-        let merged = { project: snapshot.project, toys: snapshot.toys };
+        collect();
+        version = snapshot.version;
+        if ("project" in snapshot)
+          authoritative = { project: snapshot.project, toys: snapshot.toys };
+        let merged = authoritative;
         for (const op of pending)
           merged =
             applyOperation(merged.project, merged.toys, op, false) ?? merged;
@@ -142,7 +148,15 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
               }
             : {}),
         });
-        timer = setTimeout(sync, 250);
+        timer = setTimeout(
+          sync,
+          pending.length ||
+            play.held ||
+            play.hover !== null ||
+            play.draggingTray
+            ? 250
+            : 1000,
+        );
       } catch {
         if (!alive) return;
         usePlay.setState({

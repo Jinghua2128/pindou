@@ -12,6 +12,7 @@ type Room = {
   project: BeadProject;
   toys: Toy[];
   touched: number;
+  version: number;
   peers: Map<
     string,
     { presence: Presence; seen: number; seq: number; rejected: number[] }
@@ -36,6 +37,7 @@ export function createRoom(project: BeadProject, toys: Toy[]) {
     project: { ...project, id: `coop-${id}` },
     toys,
     touched: Date.now(),
+    version: 0,
     peers: new Map(),
   });
   return id;
@@ -63,6 +65,7 @@ export function syncRoom(
     if (result) {
       room.project = result.project;
       room.toys = result.toys;
+      room.version++;
     } else peer.rejected.push(op.seq);
     peer.seq = op.seq;
   }
@@ -77,6 +80,7 @@ export function syncRoom(
   peer.seen = room.touched = Date.now();
   room.peers.set(presence.id, peer);
   return {
+    version: room.version,
     project: room.project,
     toys: room.toys,
     peers: [...room.peers.values()]
@@ -84,4 +88,17 @@ export function syncRoom(
       .map((p) => p.presence),
     rejected: peer.rejected,
   };
+}
+
+export function roomInfo(id: string) {
+  prune();
+  const room = rooms.get(id);
+  return room
+    ? {
+        name: room.project.name,
+        players: [...room.peers.values()].filter(
+          (p) => Date.now() - p.seen < 7000,
+        ).length,
+      }
+    : null;
 }

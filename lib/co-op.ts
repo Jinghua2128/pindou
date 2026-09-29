@@ -55,6 +55,7 @@ export const presenceSchema = z.object({
 export type Presence = z.infer<typeof presenceSchema>;
 export const syncSchema = z.object({
   peer: presenceSchema,
+  since: z.number().int().nonnegative().optional(),
   operations: z.array(operationSchema).max(32),
 });
 export const createRoomSchema = z.object({
@@ -62,11 +63,17 @@ export const createRoomSchema = z.object({
   toys: z.array(toySchema).max(80),
 });
 export type RoomSnapshot = {
+  version: number;
   project: BeadProject;
   toys: Toy[];
   peers: Presence[];
   rejected: number[];
 };
+export type RoomSyncResponse =
+  | RoomSnapshot
+  | (Pick<RoomSnapshot, "version" | "peers" | "rejected"> & {
+      unchanged: true;
+    });
 export function toyDiff(before: Toy[], after: Toy[]): Operation["toys"] {
   const ids = new Set([...before, ...after].map((t) => t.id));
   return [...ids].flatMap((id) => {

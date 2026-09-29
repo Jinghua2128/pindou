@@ -35,9 +35,9 @@ test("two independent makers share beads, trays, spills, undo and reconnect", as
     .click();
   await expect(page).toHaveURL(/\/room\//);
   await expect(page.getByText("Live · everyone is in sync")).toBeVisible();
-  await page
-    .getByRole("button", { name: "Invite friend", exact: true })
-    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Pull up a chair." }),
+  ).toBeVisible();
   const invite = await page.getByLabel("Invitation link").inputValue();
   expect(invite).toContain("/room/");
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
@@ -48,6 +48,11 @@ test("two independent makers share beads, trays, spills, undo and reconnect", as
   friend.on("pageerror", (e) => errors.push(e.message));
   try {
     await friend.goto(invite);
+    await friend.getByLabel("Your name", { exact: true }).fill("Sam");
+    await friend
+      .getByRole("dialog")
+      .getByRole("button", { name: "Join table", exact: true })
+      .click();
     await expect(friend.getByText("Live · everyone is in sync")).toBeVisible();
     await expect(
       page.getByText("2 at the table", { exact: true }),
@@ -248,10 +253,91 @@ test("closed invitation explains recovery without pretending to connect", async 
   page,
 }) => {
   await page.goto(`/room/${"0".repeat(48)}`);
-  await expect(page.locator(".room-loading")).toContainText(
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
     "This room has closed",
   );
   await expect(
     page.getByRole("button", { name: "Leave with your own copy" }),
   ).toBeVisible();
+});
+
+test("paste invitation, name entry, and unavailable calls stay clear on mobile", async ({
+  page,
+  request,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/");
+  await expect(page).toHaveTitle(/PinDou/);
+  await page
+    .getByRole("button", { name: "Create co-op room", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Open shared table", exact: true })
+    .click();
+  const invite = await page.getByLabel("Invitation link").inputValue();
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Voice / video", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "Calls aren’t enabled on this studio yet. Free co-op is ready to play.",
+    ),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "View Plus / manage subscription" })
+    .click();
+  await expect(
+    page.getByText("There’s nothing to buy right now.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Subscribe with Stripe" }),
+  ).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: "/tmp/pindou-plus-mobile.png",
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Join a friend", exact: true })
+    .click();
+  await page.getByLabel("Invitation link").fill("bad link");
+  await page.getByRole("button", { name: "Find table", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
+    "Paste a complete PinDou invitation",
+  );
+  // Clear this tab's joined flag to exercise the guest lobby.
+  await page.evaluate(() => sessionStorage.clear());
+  await page.getByLabel("Invitation link").fill(invite);
+  await page.getByRole("button", { name: "Find table", exact: true }).click();
+  await expect(page).toHaveURL(/\/room\/[a-f0-9]{48}$/);
+  // A full navigation resets the local player store too.
+  await page.reload();
+  await expect(
+    page.getByRole("dialog", { name: "Your chair is waiting." }),
+  ).toBeVisible();
+  await page.getByLabel("Your name", { exact: true }).fill("Mobile maker");
+  await page.screenshot({
+    path: "/tmp/pindou-join-mobile.png",
+    fullPage: true,
+  });
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Join table", exact: true })
+    .click();
+  await expect(page.getByText("Live · everyone is in sync")).toBeVisible();
+  expect(errors).toEqual([]);
+  // A checkout success URL cannot forge an entitlement.
+  const status = await request.get("/api/billing/status?checkout=complete");
+  expect(await status.json()).toMatchObject({
+    configured: false,
+    active: false,
+  });
 });

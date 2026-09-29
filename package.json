@@ -13,19 +13,23 @@
     "format": "prettier --write app components hooks lib stores types tests *.ts *.mjs *.json"
   },
   "dependencies": {
+    "@daily-co/daily-js": "^0.92.2",
     "@react-three/drei": "^10.7.0",
     "@react-three/fiber": "^9.4.0",
+    "@supabase/supabase-js": "^2.117.2",
     "animejs": "^4.1.0",
     "gsap": "^3.13.0",
     "lucide-react": "^0.468.0",
     "next": "^16.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "stripe": "^22.6.2",
     "three": "^0.180.0",
     "zod": "^4.1.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@playwright/test": "^1.55.0",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^22.0.0",
