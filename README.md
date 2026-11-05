@@ -6,7 +6,7 @@
 
 A playful, local-first 3D fuse-bead studio built from the supplied product brief. This implementation delivers the first working creation milestone, plus original templates, image conversion, fusion, exports, and a physical-product estimate. The studio opens immediately at `/` so the core experience can be tested without an account or external service.
 
-**This is a functional creation MVP, not a live commerce service.** Supabase authentication/sync, public galleries, Stripe payments, order fulfilment, and admin production workflows are not implemented yet. There is no fake checkout or payment-success state. The “Make it real” flow provides an estimate and an immutable downloadable production brief.
+**This is a functional creation MVP, not a live commerce service.** Paid-call account, subscription and voice/video integration code is available but requires provider setup and live integration testing. Cloud artwork sync, public galleries, physical-product checkout, order fulfilment, and admin production workflows are not implemented yet. There is no fake checkout or payment-success state. The “Make it real” flow provides an estimate and an immutable downloadable production brief.
 
 ## Open in VS Code
 
@@ -110,13 +110,13 @@ Motion preferences and `prefers-reduced-motion` suppress decorative movement. No
 
 `lib/pricing.ts` is the single estimate configuration. All amounts are integer SGD cents; material counts derive from cells. Accessory, packaging, handling, shipping and minimum-order adjustments are explicit. `orderSnapshot()` deep-copies the project, BOM and configuration so subsequent edits do not change the exported brief.
 
-These are **estimates only**. No server accepts money or trusts a browser-supplied price. Structural analysis currently detects connected groups and fragile endpoints; it is not a physical-strength guarantee or a full articulation-point/bridge analysis.
+These physical-product prices are **estimates only**. There is no physical-product checkout; Plus subscriptions use a configured server-side Stripe Price. Structural analysis currently detects connected groups and fragile endpoints; it is not a physical-strength guarantee or a full articulation-point/bridge analysis.
 
 ## Environment variables and provider setup
 
-Set `NEXT_PUBLIC_APP_URL` to your public origin when hosting so link-preview images use the correct URL. The other `.env.example` variables reserve future provider integrations; entering those keys alone will not enable cloud saves or checkout.
+Set `NEXT_PUBLIC_APP_URL` to your public origin when hosting so link-preview images use the correct URL. The billing and call variables enable Plus only after the database migration and provider setup in [the hosting guide](docs/COOP-HOSTING.md). Cloud artwork saves and physical-product checkout remain future work.
 
-| Variable | Intended future use |
+| Variable | Use |
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public browser key with RLS |
@@ -124,26 +124,32 @@ Set `NEXT_PUBLIC_APP_URL` to your public origin when hosting so link-preview ima
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Public Stripe key if a client SDK is needed |
 | `STRIPE_SECRET_KEY` | Server-only test-mode Checkout creation |
 | `STRIPE_WEBHOOK_SECRET` | Verified payment webhook signatures |
-| `NEXT_PUBLIC_APP_URL` | Active: origin used for social-preview metadata |
+| `NEXT_PUBLIC_APP_URL` | Public origin for metadata, invitations and billing redirects |
+| `STRIPE_PLUS_PRICE_ID` | Fixed recurring monthly Plus price |
+| `DAILY_API_KEY` | Server-only private voice/video room creation |
 
 Never expose service-role or Stripe secret keys through `NEXT_PUBLIC_*` names or commit real `.env` files.
 
 ### Supabase and database phase
 
-No migrations have been applied or generated yet. The next backend phase should introduce `profiles`, `projects`, `project_versions`, `presets`, `preset_categories`, `bead_colors`, `orders`, `order_status_history`, `pricing_settings`, `inventory`, `favorites`, `achievements`, `user_achievements`, and `daily_challenges`. Use UUID identifiers, versioned logical-grid JSONB, private-by-default project storage, and RLS for owner/admin permissions. Obtain user identity from a validated server session; never trust a client-supplied role. Public project reads must be deliberate. Thumbnails belong in access-controlled Supabase Storage buckets.
+A private billing/call migration is provided in `supabase/migrations/202609280001_paid_calls.sql`; it has not been applied to a hosted database. The next backend phase should introduce `profiles`, `projects`, `project_versions`, `presets`, `preset_categories`, `bead_colors`, `orders`, `order_status_history`, `pricing_settings`, `inventory`, `favorites`, `achievements`, `user_achievements`, and `daily_challenges`. Use UUID identifiers, versioned logical-grid JSONB, private-by-default project storage, and RLS for owner/admin permissions. Obtain user identity from a validated server session; never trust a client-supplied role. Public project reads must be deliberate. Thumbnails belong in access-controlled Supabase Storage buckets.
 
-### Stripe phase
+### Physical-product Stripe phase
 
 Implement authenticated server-side Checkout Sessions only after cloud project persistence and server pricing are in place. Load the owned project and current pricing server-side, compute totals, store an immutable pending order, and create a test-mode Stripe session. Mark an order paid only after signature-verified, idempotent webhook processing. Do not infer payment success from a redirect. Shipping initially targets Singapore. This phase also needs order timelines, authenticated admin tools, production sheets, inventory and pricing management.
 
 ## Deployment
 
-For co-op, deploy `pnpm build` + `pnpm start` on one persistent Node.js server behind HTTPS. The room registry is process-local: do not deploy the current room API to stateless/serverless functions or multiple workers/replicas. Those environments require a shared durable store plus cross-worker synchronization before co-op is reliable. The static/local editor can still be hosted using normal Next.js hosting. Changing the origin creates a separate browser-storage namespace. Supabase and Stripe remain future integrations.
+For co-op, deploy `pnpm build` + `pnpm start` on one persistent Node.js server behind HTTPS. The room registry is process-local: do not deploy the current room API to stateless/serverless functions or multiple workers/replicas. Those environments require a shared durable store plus cross-worker synchronization before co-op is reliable. The static/local editor can still be hosted using normal Next.js hosting. Changing the origin creates a separate browser-storage namespace. For paid-call setup and current cost estimates, see [Co-op hosting and calls](docs/COOP-HOSTING.md).
 
 ## Validation and remaining work
 
 Validation includes TypeScript, lint, production build, unit tests, and Playwright journeys. The co-op suite opens two isolated browsers using the actual LAN invitation, places and moves beads, shares box movement/spills, reconnects after offline changes, and checks closed-room recovery. The test suite covers grid/line/rectangle/fill behavior, non-wrapping adjacency, compact history, mirrored strokes, color replacement, selection movement, 2,304-cell fill, BOM, structural groups, schema validation, image mapping, integer pricing and snapshot immutability. Playwright covers the main editor journey, template/fusion/estimate/export flow, duplication, and layout widths of 375, 390, 430, 768, 1024, 1440 and 1920 px.
 
-Remaining brief features include the dedicated animated landing page, Supabase/Stripe integration, account authentication, public gallery/sharing, admin/production/order routes, configurable masks, manual crop and before/after image controls, dithering, complete achievements, richer completion celebrations, keyring positioning, and deeper structural validation. These are intentionally not presented as complete.
+Remaining brief features include the dedicated animated landing page, cloud project persistence, physical-product Stripe checkout, public gallery/sharing, admin/production/order routes, configurable masks, manual crop and before/after image controls, dithering, complete achievements, richer completion celebrations, keyring positioning, and deeper structural validation. These are intentionally not presented as complete.
 
 Design reference: `docs/studio-concept.png`, generated with the built-in Image Gen tool. The implementation uses live Three.js artwork and data-derived SVG thumbnails, not the raster concept as UI. The compact studio-first entry, extra selection/move tools, real saved-state wording, and settings control are intentional implementation differences.
+
+### Paid voice/video beta
+
+One Plus member hosts; friends join free. The new `/account/plus` flow uses Supabase email OTP, Stripe hosted Checkout/portal, verified subscription webhooks, and private Daily calls. The default proposed allowance is five 30-minute sessions per UTC month with up to four participants. Calls remain disabled until all provider settings and the migration are installed. See [setup, costs and remaining launch checks](docs/COOP-HOSTING.md).

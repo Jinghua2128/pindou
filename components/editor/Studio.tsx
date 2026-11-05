@@ -97,10 +97,11 @@ export function Studio({
 }) {
   const router = useRouter(),
     { ready, saveState, offline, missing } = useEditorLifecycle(
-      projectId,
+      roomId ? `coop-${roomId}` : projectId,
       !!roomId,
     );
-  useCoop(roomId, ready);
+  const entryRoom = usePlay((s) => s.entryRoom);
+  useCoop(roomId, ready && (!roomId || entryRoom === roomId));
   const roomReady = usePlay((s) => s.hydrated);
   const roomStatus = usePlay((s) => s.status);
   const [dialog, setDialog] = useState<Dialog>(create ? "new" : null),

@@ -7,6 +7,10 @@ export async function roomBody(request: Request) {
     new URL(origin).host !== request.headers.get("host")
   )
     throw new Error("Cross-origin request blocked");
+  return JSON.parse(await boundedText(request));
+}
+
+export async function boundedText(request: Request) {
   const reader = request.body?.getReader();
   if (!reader) throw new Error("Missing request body");
   const chunks: Uint8Array[] = [];
@@ -21,5 +25,5 @@ export async function roomBody(request: Request) {
     }
     chunks.push(value);
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  return Buffer.concat(chunks).toString("utf8");
 }

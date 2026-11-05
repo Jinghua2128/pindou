@@ -11,6 +11,7 @@ type Held = {
 };
 type PlayState = {
   draggingTray: boolean;
+  entryRoom: string | null;
   playerName: string;
   toys: Toy[];
   held: Held | null;
@@ -28,6 +29,7 @@ type PlayState = {
 };
 export const usePlay = create<PlayState>((set, get) => ({
   draggingTray: false,
+  entryRoom: null,
   playerName: "Little maker",
   toys: initialToys(),
   held: null,
