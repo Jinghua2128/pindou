@@ -24,6 +24,89 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("paid call boundaries", () => {
+  it("requires a subscriber to start, lets a guest join free, and blocks new joins after revocation", async () => {
+    const host = crypto.randomUUID(),
+      id = createRoom(createProject(), []);
+    for (const [key, value] of Object.entries({
+      NEXT_PUBLIC_SUPABASE_URL: "https://database.invalid",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "test",
+      SUPABASE_SERVICE_ROLE_KEY: "test",
+      STRIPE_SECRET_KEY: "test",
+      STRIPE_WEBHOOK_SECRET: "test",
+      STRIPE_PLUS_PRICE_ID: "plus",
+      DAILY_API_KEY: "test",
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000",
+    }))
+      vi.stubEnv(key, value);
+    const transport = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", transport);
+    function replies(...values: unknown[]) {
+      for (const value of values)
+        transport.mockResolvedValueOnce(Response.json(value));
+    }
+    const submit = (action: "start" | "join", signedIn = false) => {
+      const req = request(`/api/rooms/${id}/call`, {
+        action,
+        name: signedIn ? "Host" : "Friend",
+        mode: "voice",
+      });
+      if (signedIn) req.headers.set("authorization", "Bearer host-test-token");
+      return callPost(req, { params: Promise.resolve({ id }) });
+    };
+    expect((await submit("start")).status).toBe(401);
+    expect(transport).not.toHaveBeenCalled();
+    replies({ id: host }, []);
+    expect((await submit("start", true)).status).toBe(403);
+    const expires = new Date(Date.now() + 30 * 60000).toISOString();
+    const subscription = [
+      { status: "active", price_id: "plus", current_period_end: expires },
+    ];
+    const session = {
+      id: crypto.randomUUID(),
+      host_user_id: host,
+      expires_at: expires,
+      mode: "voice",
+      status: "pending",
+    };
+    const name = `pindou-${session.id.replaceAll("-", "")}`,
+      url = `https://example.daily.co/${name}`;
+    replies(
+      { id: host },
+      subscription,
+      [session],
+      { name, url, privacy: "private" },
+      null,
+      subscription,
+      { token: "host-ticket" },
+    );
+    const started = await submit("start", true);
+    expect(started.status).toBe(200);
+    expect(await started.json()).toMatchObject({
+      url,
+      token: "host-ticket",
+      mode: "voice",
+    });
+    transport.mockClear();
+    const active = [
+      { ...session, status: "active", provider_room: name, provider_url: url },
+    ];
+    replies(active, subscription, { token: "guest-ticket" });
+    const joined = await submit("join");
+    expect(joined.status).toBe(200);
+    expect(await joined.json()).toMatchObject({ url, token: "guest-ticket" });
+    const urls = transport.mock.calls.map(([input]) => new URL(String(input)));
+    expect(urls.map((u) => u.pathname)).toEqual([
+      "/rest/v1/call_sessions",
+      "/rest/v1/subscriptions",
+      "/v1/meeting-tokens",
+    ]);
+    expect(urls[0].searchParams.get("coop_room_id")).toBe(`eq.${id}`);
+    expect(urls[1].searchParams.get("user_id")).toBe(`eq.${host}`);
+    transport.mockClear();
+    replies(active, []);
+    expect((await submit("join")).status).toBe(403);
+    expect(transport).toHaveBeenCalledTimes(2); // No new meeting token.
+  });
   it("requires an active matching unexpired subscription", () => {
     const now = Date.parse("2026-09-29T00:00:00Z");
     const sub = {
