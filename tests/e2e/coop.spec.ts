@@ -11,6 +11,32 @@ async function cells(page: Page) {
     )[];
   });
 }
+async function dragBox(
+  page: Page,
+  color: string,
+  speed: "fast" | "slow" = "fast",
+) {
+  const handle = page.getByRole("button", {
+    name: `Move ${color} box`,
+    exact: true,
+  });
+  await handle.scrollIntoViewIfNeeded();
+  const box = (await handle.boundingBox())!;
+  const x = box.x + box.width / 2,
+    y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  if (speed === "slow") {
+    for (let i = 1; i <= 8; i++) {
+      await page.waitForTimeout(60);
+      await page.mouse.move(x, y + i * 4);
+    }
+  } else {
+    await page.mouse.move(x, y + 10);
+    await page.mouse.move(x, y + 58);
+  }
+  await page.mouse.up();
+}
 test("two independent makers share beads, trays, spills, undo and reconnect", async ({
   page,
   browser,
@@ -27,7 +53,7 @@ test("two independent makers share beads, trays, spills, undo and reconnect", as
     .getByRole("button", { name: "Start creating", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Create co-op room", exact: true })
+    .getByRole("button", { name: "Better with a little company", exact: true })
     .click();
   await page.getByLabel("Your name", { exact: true }).fill("Alex");
   await page
@@ -121,6 +147,36 @@ test("two independent makers share beads, trays, spills, undo and reconnect", as
       .toBe(true);
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await expect(page.locator(".workspace-status")).toContainText("2 beads");
+    // Approach the same physical box from independent camera views.
+    await friend
+      .getByRole("button", { name: "Isometric", exact: true })
+      .click();
+    const pinkBox = (p: Page) =>
+      p.getByRole("button", { name: "Take Bubblegum bead", exact: true });
+    await pinkBox(page).hover();
+    await pinkBox(friend).hover();
+    await expect(
+      page.locator(".peer-cursor").filter({ hasText: "Sam" }),
+    ).toBeVisible();
+    await expect(
+      friend.locator(".peer-cursor").filter({ hasText: "Alex" }),
+    ).toBeVisible();
+    await expect(page.locator(".loose-bead")).toHaveCount(0);
+    const far = await friend.locator("canvas").boundingBox();
+    await friend.mouse.move(far!.x + far!.width / 2, far!.y + far!.height / 2);
+    await pinkBox(page).click();
+    await expect(friend.locator(".peer-cursor")).toContainText(
+      "Alex · Bubblegum",
+    );
+    await pinkBox(friend).hover();
+    await expect(page.locator(".loose-bead")).toHaveCount(10);
+    await expect(friend.locator(".loose-bead")).toHaveCount(10);
+    await page.keyboard.press("Escape");
+    await friend
+      .getByRole("button", { name: "Tidy table", exact: true })
+      .click();
+    await expect(page.locator(".loose-bead")).toHaveCount(0);
+    await friend.getByRole("button", { name: "Top", exact: true }).click();
     // Move a box using its accessible keyboard controls, then spill it.
     const handle = friend.getByRole("button", {
       name: "Move Bubblegum box",
@@ -128,23 +184,17 @@ test("two independent makers share beads, trays, spills, undo and reconnect", as
     });
     await handle.focus();
     await friend.keyboard.press("ArrowRight");
-    await expect(page.locator('[data-tray="tray-1"]')).toHaveCSS(
-      "left",
-      await friend
-        .locator('[data-tray="tray-1"]')
-        .evaluate((el) => getComputedStyle(el).left),
+    await expect(page.locator('[data-tray="tray-1"]')).toHaveAttribute(
+      "data-position",
+      "53,30",
     );
-    await friend
-      .getByRole("button", { name: "Spill Bubblegum box", exact: true })
-      .click();
-    await expect(page.locator(".loose-bead")).toHaveCount(10);
+    await dragBox(friend, "Bubblegum");
+    await expect(page.locator(".loose-bead")).toHaveCount(5);
     await context.setOffline(true);
-    await friend
-      .getByRole("button", { name: "Spill Leaf green box", exact: true })
-      .click();
+    await dragBox(friend, "Leaf green");
     await expect(friend.getByText(/Reconnecting…/)).toBeVisible();
     await context.setOffline(false);
-    await expect(page.locator(".loose-bead")).toHaveCount(20);
+    await expect(page.locator(".loose-bead")).toHaveCount(10);
     const moving = friend.getByRole("button", {
       name: "Move Sunshine box",
       exact: true,
@@ -153,7 +203,7 @@ test("two independent makers share beads, trays, spills, undo and reconnect", as
     const handleBox = (await moving.boundingBox())!;
     const priorPosition = await page
       .locator('[data-tray="tray-2"]')
-      .getAttribute("style");
+      .getAttribute("data-position");
     await friend.mouse.move(
       handleBox.x + handleBox.width / 2,
       handleBox.y + handleBox.height / 2,
@@ -166,16 +216,37 @@ test("two independent makers share beads, trays, spills, undo and reconnect", as
     );
     // The other maker sees the box move before the drag ends.
     await expect(page.locator('[data-tray="tray-2"]')).not.toHaveAttribute(
-      "style",
+      "data-position",
       priorPosition!,
     );
     await friend.mouse.up();
     await expect(page.locator('[data-tray="tray-2"]')).toHaveAttribute(
-      "style",
-      (await friend.locator('[data-tray="tray-2"]').getAttribute("style"))!,
+      "data-position",
+      (await friend
+        .locator('[data-tray="tray-2"]')
+        .getAttribute("data-position"))!,
     );
     await page.getByRole("button", { name: "Tidy table", exact: true }).click();
     await expect(friend.locator(".loose-bead")).toHaveCount(0);
+    await page.getByRole("button", { name: "Add box", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Add Lilac box", exact: true })
+      .click();
+    await expect(
+      friend.getByRole("button", { name: "Take Lilac bead", exact: true }),
+    ).toBeVisible();
+    await friend
+      .getByRole("button", { name: "Tidy table", exact: true })
+      .click();
+    await expect(page.locator("[data-tray]")).toHaveCount(4);
+    await friend.getByRole("button", { name: "Add box", exact: true }).click();
+    await friend
+      .getByRole("button", { name: "Put away Lilac box", exact: true })
+      .click();
+    await friend
+      .getByRole("button", { name: "Close dialog", exact: true })
+      .click();
+    await expect(page.locator("[data-tray]")).toHaveCount(3);
     await page.screenshot({ path: "/tmp/pindou-coop.png", fullPage: true });
     expect(errors).toEqual([]);
   } finally {
@@ -210,9 +281,9 @@ test("palette drag, spilled-bead pickup, cancel and mobile tap-to-place", async 
   await expect
     .poll(async () => (await cells(page)).filter(Boolean))
     .toEqual(["lavender"]);
-  await page
-    .getByRole("button", { name: "Spill Bubblegum box", exact: true })
-    .click();
+  await dragBox(page, "Leaf green", "slow");
+  await expect(page.locator(".loose-bead")).toHaveCount(0);
+  await dragBox(page, "Bubblegum");
   await page
     .getByRole("button", {
       name: "Pick up spilled Bubblegum bead",
@@ -224,7 +295,7 @@ test("palette drag, spilled-bead pickup, cancel and mobile tap-to-place", async 
     "Holding Bubblegum",
   );
   await page.keyboard.press("Escape");
-  await expect(page.locator(".loose-bead")).toHaveCount(10);
+  await expect(page.locator(".loose-bead")).toHaveCount(5);
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .getByRole("button", {
@@ -240,7 +311,7 @@ test("palette drag, spilled-bead pickup, cancel and mobile tap-to-place", async 
     mobile.y + mobile.height * 0.5,
   );
   await expect(page.locator(".workspace-status")).toContainText("2 beads");
-  await expect(page.locator(".loose-bead")).toHaveCount(9);
+  await expect(page.locator(".loose-bead")).toHaveCount(4);
   await expect(page.locator(".pickup-status")).not.toContainText("Holding");
   expect(
     await page.evaluate(
@@ -270,7 +341,7 @@ test("paste invitation, name entry, and unavailable calls stay clear on mobile",
   await page.goto("/");
   await expect(page).toHaveTitle(/PinDou/);
   await page
-    .getByRole("button", { name: "Create co-op room", exact: true })
+    .getByRole("button", { name: "Better with a little company", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Open shared table", exact: true })
@@ -305,6 +376,9 @@ test("paste invitation, name entry, and unavailable calls stay clear on mobile",
     ),
   ).toBe(true);
   await page.goto("/");
+  await page
+    .getByRole("button", { name: "Better with a little company" })
+    .click();
   await page
     .getByRole("button", { name: "Join a friend", exact: true })
     .click();

@@ -2,6 +2,7 @@
 /* Browser storage and connectivity are external systems hydrated after the SSR pass. */
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
+import { usePlay } from "@/stores/play";
 import { useEditor } from "@/stores/editor";
 import { readProjects, saveProject } from "@/lib/storage";
 import { playClick } from "@/lib/motion";
@@ -12,7 +13,17 @@ export function useEditorLifecycle(projectId?: string, shared = false) {
     [offline, setOffline] = useState(false),
     [missing, setMissing] = useState(false);
   useEffect(() => {
+    usePlay.setState({
+      held: null,
+      hover: null,
+      position: null,
+      draggingTray: null,
+      notice: "",
+    });
+    useEditor.getState().setPlacement(shared ? "interactive" : "classic");
     try {
+      if (!shared && localStorage.getItem("pindou.placement") === "interactive")
+        useEditor.getState().setPlacement("interactive");
       const projects = readProjects(),
         id = projectId || localStorage.getItem("pindou.active");
       const project = projects.find((p) => p.id === id);
@@ -124,7 +135,8 @@ export function useEditorLifecycle(projectId?: string, shared = false) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const key = e.key.toLowerCase();
       if (keys[key]) s.setTool(keys[key]);
-      if (key === "m") useEditor.setState({ mirror: !s.mirror });
+      if (key === "m" && s.placement === "classic")
+        useEditor.setState({ mirror: !s.mirror });
       if (["1", "2", "3"].includes(key))
         s.setCamera(key === "1" ? "top" : key === "2" ? "iso" : "3d");
       if (key === " " && !e.repeat) {

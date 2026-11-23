@@ -12,7 +12,7 @@ import {
   Hand,
   Trash2,
 } from "lucide-react";
-import { useEditor } from "@/stores/editor";
+import { interactiveTools, useEditor } from "@/stores/editor";
 import { animatePress } from "@/lib/motion";
 import type { Tool } from "@/types/project";
 const tools: {
@@ -32,43 +32,48 @@ const tools: {
   { id: "hand", label: "Pan / orbit", shortcut: "H", icon: Hand },
 ];
 export function Toolbar({ onClear }: { onClear: () => void }) {
+  const physical = useEditor((s) => s.placement === "interactive");
   const tool = useEditor((s) => s.tool),
     setTool = useEditor((s) => s.setTool),
     mirror = useEditor((s) => s.mirror),
     fused = useEditor((s) => s.fused);
   return (
     <div className="tool-rail" aria-label="Drawing tools">
-      {tools.map(({ id, label, shortcut, icon: Icon }) => (
+      {tools
+        .filter((t) => !physical || interactiveTools.has(t.id))
+        .map(({ id, label, shortcut, icon: Icon }) => (
+          <button
+            key={id}
+            className={`tool-button ${tool === id ? "selected" : ""}`}
+            title={`${label} (${shortcut})`}
+            aria-label={`${label} (${shortcut})`}
+            aria-pressed={tool === id}
+            disabled={fused && id !== "hand"}
+            onClick={(e) => {
+              setTool(id);
+              animatePress(e.currentTarget);
+            }}
+          >
+            <Icon size={21} />
+            <span>{label === "Pan / orbit" ? "Move" : label}</span>
+          </button>
+        ))}
+      <span className="tool-divider" />
+      {!physical && (
         <button
-          key={id}
-          className={`tool-button ${tool === id ? "selected" : ""}`}
-          title={`${label} (${shortcut})`}
-          aria-label={`${label} (${shortcut})`}
-          aria-pressed={tool === id}
-          disabled={fused && id !== "hand"}
+          className={`tool-button ${mirror ? "selected" : ""}`}
+          title="Mirror (M)"
+          aria-label="Mirror (M)"
+          aria-pressed={mirror}
           onClick={(e) => {
-            setTool(id);
+            useEditor.setState({ mirror: !mirror });
             animatePress(e.currentTarget);
           }}
         >
-          <Icon size={21} />
-          <span>{label === "Pan / orbit" ? "Move" : label}</span>
+          <FlipHorizontal2 size={21} />
+          <span>Mirror</span>
         </button>
-      ))}
-      <span className="tool-divider" />
-      <button
-        className={`tool-button ${mirror ? "selected" : ""}`}
-        title="Mirror (M)"
-        aria-label="Mirror (M)"
-        aria-pressed={mirror}
-        onClick={(e) => {
-          useEditor.setState({ mirror: !mirror });
-          animatePress(e.currentTarget);
-        }}
-      >
-        <FlipHorizontal2 size={21} />
-        <span>Mirror</span>
-      </button>
+      )}
       <button
         className="tool-button clear-tool"
         title="Clear board"

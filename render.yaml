@@ -1,0 +1,19 @@
+# One Node process owns all shared tables. Do not enable autoscaling.
+services:
+  - type: web
+    name: pindou
+    runtime: node
+    region: singapore
+    plan: 0.5c-512mb
+    numInstances: 1
+    autoDeployTrigger: "off"
+    buildCommand: >-
+      corepack enable && pnpm install --frozen-lockfile &&
+      NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-$RENDER_EXTERNAL_URL}" pnpm build
+    startCommand: >-
+      NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-$RENDER_EXTERNAL_URL}"
+      pnpm start --port "$PORT"
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

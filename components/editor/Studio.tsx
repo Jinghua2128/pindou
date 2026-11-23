@@ -127,13 +127,6 @@ export function Studio({
   useEffect(() => {
     if (!ready || reducedMotion()) return;
     const ctx = gsap.context(() => {
-      gsap.from(".studio-intro", { y: 10, opacity: 0, duration: 0.5 });
-      gsap.from(".workspace", {
-        y: 18,
-        opacity: 0,
-        duration: 0.65,
-        delay: 0.1,
-      });
       gsap.from(".template-rail", {
         y: 12,
         opacity: 0,
@@ -169,6 +162,7 @@ export function Studio({
   function fuse() {
     useEditor.getState().end();
     useEditor.getState().setCamera("top");
+    usePlay.setState({ held: null, hover: null, draggingTray: null });
     useEditor.setState({ fusing: true });
     setFuseStage("A little warmth. A little magic.");
     fuseTimer.current = setTimeout(
@@ -219,18 +213,18 @@ export function Studio({
       <Header onSettings={() => setDialog("settings")} />
       <main className="studio-main">
         <div className="studio-intro">
-          <div>
-            <h1>Little things, made by you.</h1>
-            <p>A little color. A little patience. Something entirely yours.</p>
+          <h1>Little things, made by you.</h1>
+          <div className="studio-actions">
+            {!roomId && <CoopControls />}
+            <button
+              className="primary new-button"
+              aria-label="New creation"
+              onClick={() => setDialog("new")}
+            >
+              <Plus size={21} />
+              <span>New creation</span>
+            </button>
           </div>
-          <button
-            className="primary new-button"
-            aria-label="New creation"
-            onClick={() => setDialog("new")}
-          >
-            <Plus size={21} />
-            <span>New creation</span>
-          </button>
         </div>
         {offline ? (
           <div className="offline-notice">
@@ -238,215 +232,207 @@ export function Studio({
             You’re offline. Your work is saved on this device.
           </div>
         ) : null}
-        <CoopControls roomId={roomId} />
+        {roomId && <CoopControls roomId={roomId} />}
         <div className="workspace">
-          <section
-            className={`craft-table ${fusing ? "is-fusing" : ""} ${fused ? "is-fused" : ""}`}
-            aria-label="Bead creation workspace"
-          >
-            <div className="canvas-header">
-              <div className="project-title">
-                {rename ? (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      useEditor.getState().rename(name);
-                      setRename(false);
-                    }}
-                  >
-                    <input
-                      aria-label="Project name"
-                      autoFocus
-                      value={name}
-                      maxLength={80}
-                      onChange={(e) => setName(e.target.value)}
-                      onBlur={() => {
+          <div className="board-column">
+            <section
+              className={`craft-table ${fusing ? "is-fusing" : ""} ${fused ? "is-fused" : ""}`}
+              aria-label="Bead creation workspace"
+            >
+              <div className="canvas-header">
+                <div className="project-title">
+                  {rename ? (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
                         useEditor.getState().rename(name);
                         setRename(false);
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") setRename(false);
+                    >
+                      <input
+                        aria-label="Project name"
+                        autoFocus
+                        value={name}
+                        maxLength={80}
+                        onChange={(e) => setName(e.target.value)}
+                        onBlur={() => {
+                          useEditor.getState().rename(name);
+                          setRename(false);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") setRename(false);
+                        }}
+                      />
+                    </form>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setName(project.name);
+                        setRename(true);
                       }}
-                    />
-                  </form>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setName(project.name);
-                      setRename(true);
-                    }}
-                    title="Rename project"
+                      title="Rename project"
+                    >
+                      <strong>{project.name}</strong>
+                      <Pencil size={15} />
+                    </button>
+                  )}
+                  <span
+                    className={`save-state ${saveState.includes("failed") ? "error-copy" : ""}`}
+                    aria-live="polite"
                   >
-                    <strong>{project.name}</strong>
-                    <Pencil size={15} />
+                    <Cloud size={18} />
+                    <span>{saveState}</span>
+                  </span>
+                </div>
+                <div className="canvas-actions">
+                  <button
+                    className="icon-button"
+                    aria-label="Undo"
+                    title="Undo (⌘ / Ctrl Z)"
+                    disabled={!past.length || fusing}
+                    onClick={() => useEditor.getState().undo()}
+                  >
+                    <Undo2 size={20} />
                   </button>
+                  <button
+                    className="icon-button"
+                    aria-label="Redo"
+                    title="Redo (⌘ / Ctrl Shift Z)"
+                    disabled={!future.length || fusing}
+                    onClick={() => useEditor.getState().redo()}
+                  >
+                    <Redo2 size={20} />
+                  </button>
+                  <span className="action-divider" />
+                  <button
+                    className="secondary export-button"
+                    aria-label="Export"
+                    onClick={() => setDialog("export")}
+                  >
+                    <ArrowDownToLine size={17} />
+                    <span>Export</span>
+                  </button>
+                </div>
+              </div>
+              <div
+                className="scene-container"
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                {ready ? (
+                  <SceneBoundary>
+                    <BeadScene />
+                  </SceneBoundary>
+                ) : (
+                  <div className="scene-loading">
+                    <span />
+                    <span />
+                    <span />
+                    <p>Setting out your little beads…</p>
+                  </div>
                 )}
-                <span
-                  className={`save-state ${saveState.includes("failed") ? "error-copy" : ""}`}
-                  aria-live="polite"
-                >
-                  <Cloud size={18} />
-                  <span>{saveState}</span>
-                </span>
               </div>
-              <div className="canvas-actions">
-                <button
-                  className="icon-button"
-                  aria-label="Undo"
-                  title="Undo (⌘ / Ctrl Z)"
-                  disabled={!past.length || fusing}
-                  onClick={() => useEditor.getState().undo()}
-                >
-                  <Undo2 size={20} />
-                </button>
-                <button
-                  className="icon-button"
-                  aria-label="Redo"
-                  title="Redo (⌘ / Ctrl Shift Z)"
-                  disabled={!future.length || fusing}
-                  onClick={() => useEditor.getState().redo()}
-                >
-                  <Redo2 size={20} />
-                </button>
-                <span className="action-divider" />
-                <button
-                  className="secondary export-button"
-                  aria-label="Export"
-                  onClick={() => setDialog("export")}
-                >
-                  <ArrowDownToLine size={17} />
-                  <span>Export</span>
-                </button>
-              </div>
-            </div>
-            <div
-              className="scene-container"
-              onContextMenu={(e) => e.preventDefault()}
-            >
-              {ready ? (
-                <SceneBoundary>
-                  <BeadScene />
-                </SceneBoundary>
-              ) : (
-                <div className="scene-loading">
-                  <span />
-                  <span />
-                  <span />
-                  <p>Setting out your little beads…</p>
+              {roomId && !roomReady && (
+                <div className="room-loading" role="status">
+                  <strong>{roomStatus}</strong>
+                  <p>Your shared board will appear here.</p>
                 </div>
               )}
-            </div>
-            {roomId && !roomReady && (
-              <div className="room-loading" role="status">
-                <strong>{roomStatus}</strong>
-                <p>Your shared board will appear here.</p>
-              </div>
-            )}
-            <Toolbar onClear={() => setDialog("clear")} />
-            <div className="desk-note note-top">
-              Good things
-              <br />
-              take shape. <span>♡</span>
-            </div>
-            <div className="desk-note note-bottom">
-              Beads today,
-              <br />
-              happy little
-              <br />
-              things tomorrow.<span> ↗</span>
-            </div>
-            {fusing ? (
-              <div className="fuse-overlay">
-                <div className="heat-sweep" />
-                <span>
-                  <Sparkles size={21} />
-                  {fuseStage}
-                </span>
-              </div>
-            ) : null}
-            {fused ? (
-              <div className="finished-badge">
-                <CheckCheck size={17} />
-                Freshly fused{" "}
-                <button
-                  onClick={() => {
-                    useEditor.setState({ fused: false, tool: "pencil" });
-                  }}
-                >
-                  Keep creating <Pencil size={13} />
-                </button>
-              </div>
-            ) : null}
-            {selection ? (
-              <div className="selection-hint">
-                Use arrow keys to move your selection{" "}
-                <button
-                  onClick={() => useEditor.setState({ selection: null })}
-                  aria-label="Clear selection"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            ) : null}
-            <div className="canvas-bottom">
-              <span className="grid-caption">
-                {project.width} × {project.height} pegboard
-              </span>
-              <div className="view-controls" aria-label="Camera view">
-                {(
-                  [
-                    { id: "top", label: "Top", Icon: Grid2X2 },
-                    { id: "iso", label: "Isometric", Icon: Box },
-                    { id: "3d", label: "3D", Icon: Maximize },
-                  ] as const
-                ).map(({ id, label, Icon }) => (
+              <Toolbar onClear={() => setDialog("clear")} />
+              {fusing ? (
+                <div className="fuse-overlay">
+                  <div className="heat-sweep" />
+                  <span>
+                    <Sparkles size={21} />
+                    {fuseStage}
+                  </span>
+                </div>
+              ) : null}
+              {fused ? (
+                <div className="finished-badge">
+                  <CheckCheck size={17} />
+                  Freshly fused{" "}
                   <button
-                    key={id}
-                    aria-pressed={camera === id}
-                    className={camera === id ? "selected" : ""}
-                    onClick={() =>
-                      useEditor.getState().setCamera(id as CameraMode)
-                    }
+                    onClick={() => {
+                      useEditor.setState((s) => ({
+                        fused: false,
+                        tool: s.placement === "interactive" ? "grab" : "pencil",
+                      }));
+                    }}
                   >
-                    <Icon size={17} />
-                    <span>{label}</span>
+                    Keep creating <Pencil size={13} />
                   </button>
-                ))}
+                </div>
+              ) : null}
+              {selection ? (
+                <div className="selection-hint">
+                  Use arrow keys to move your selection{" "}
+                  <button
+                    onClick={() => useEditor.setState({ selection: null })}
+                    aria-label="Clear selection"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : null}
+              <div className="canvas-bottom">
+                <span className="grid-caption">
+                  {project.width} × {project.height} pegboard
+                </span>
+                <div className="view-controls" aria-label="Camera view">
+                  {(
+                    [
+                      { id: "top", label: "Top", Icon: Grid2X2 },
+                      { id: "iso", label: "Isometric", Icon: Box },
+                      { id: "3d", label: "3D", Icon: Maximize },
+                    ] as const
+                  ).map(({ id, label, Icon }) => (
+                    <button
+                      key={id}
+                      aria-pressed={camera === id}
+                      className={camera === id ? "selected" : ""}
+                      onClick={() =>
+                        useEditor.getState().setCamera(id as CameraMode)
+                      }
+                    >
+                      <Icon size={17} />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="zoom-controls">
+                  <button
+                    aria-label="Zoom out"
+                    onClick={() => useEditor.getState().setZoom(zoom - 15)}
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <button
+                    className="zoom-value"
+                    title="Reset camera and zoom"
+                    onClick={() => {
+                      useEditor.getState().setZoom(100);
+                      useEditor.getState().setCamera("iso");
+                    }}
+                  >
+                    {zoom}%
+                  </button>
+                  <button
+                    aria-label="Zoom in"
+                    onClick={() => useEditor.getState().setZoom(zoom + 15)}
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
               </div>
-              <div className="zoom-controls">
-                <button
-                  aria-label="Zoom out"
-                  onClick={() => useEditor.getState().setZoom(zoom - 15)}
-                >
-                  <Minus size={16} />
-                </button>
-                <button
-                  className="zoom-value"
-                  title="Reset camera and zoom"
-                  onClick={() => {
-                    useEditor.getState().setZoom(100);
-                    useEditor.getState().setCamera("iso");
-                  }}
-                >
-                  {zoom}%
-                </button>
-                <button
-                  aria-label="Zoom in"
-                  onClick={() => useEditor.getState().setZoom(zoom + 15)}
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-            </div>
-          </section>
+            </section>
+            <PlayTable shared={!!roomId} />
+          </div>
           <Palette onFuse={fuse} onReal={() => setDialog("order")} />
         </div>
-        <PlayTable />
         <div className="workspace-status">
           <span>
             <i />
-            {count} beads <span className="status-dot">·</span> {colors} colors{" "}
-            <span className="status-dot">·</span> A little joy in progress
+            {count} beads <span className="status-dot">·</span> {colors} colors
           </span>
           <button onClick={() => setDialog("help")}>
             <HelpCircle size={14} />
@@ -605,9 +591,11 @@ export function Studio({
             ))}
           </div>
           <p className="muted small-copy">
-            Click or drag to paint. Right-click to erase. Scroll to zoom. On
-            touch screens, use two fingers to zoom and pan. The Move tool
-            rotates your work in 3D view.
+            In Classic, click or drag to paint. In Interactive, take one bead
+            from a box and tap a peg. Tap the same box or press Escape to put it
+            back. Right-click to erase. Scroll to zoom. On touch screens, use
+            two fingers to zoom and pan. The Move tool rotates your work in 3D
+            view.
           </p>
           <p className="muted small-copy">
             For keyboard placement, use the accessible grid below.

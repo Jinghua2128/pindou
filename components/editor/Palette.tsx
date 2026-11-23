@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { usePlay } from "@/stores/play";
 import { useEditor } from "@/stores/editor";
 import { COLORS, COLOR_MAP } from "@/lib/colors";
 import { billOfMaterials, structuralCheck } from "@/lib/grid";
@@ -23,6 +24,7 @@ export function Palette({
   onFuse: () => void;
   onReal: () => void;
 }) {
+  const physical = useEditor((s) => s.placement === "interactive");
   const dragBead = useBeadDrag();
   const [tab, setTab] = useState("Colors"),
     [expanded, setExpanded] = useState(false),
@@ -47,9 +49,10 @@ export function Palette({
       aria-label={`Select ${COLOR_MAP[id].name}`}
       aria-pressed={color === id}
       className={`swatch ${small ? "small" : ""} ${color === id ? "selected" : ""}`}
-      onPointerDown={(e) => dragBead(e, id)}
+      onPointerDown={(e) => !physical && dragBead(e, id)}
       onClick={(e) => {
         setColor(id);
+        if (physical) usePlay.getState().stockColor(id);
         animatePress(e.currentTarget.querySelector("span")!);
       }}
     >
@@ -106,7 +109,11 @@ export function Palette({
                   <span>
                     {selected.hex.toUpperCase()} <small>· {selected.sku}</small>
                   </span>
-                  <p>Pick a color, or drag a bead to the board.</p>
+                  <p>
+                    {physical
+                      ? "Choose a color to stock a box, then take a bead from the table."
+                      : "Pick a color, or drag a bead to the board."}
+                  </p>
                 </div>
               </div>
               <div className="swatch-grid">

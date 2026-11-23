@@ -14,6 +14,8 @@ import type { ComponentRef } from "react";
 type OrbitControlsImpl = ComponentRef<typeof OrbitControls>;
 import { useEditor } from "@/stores/editor";
 import { usePlay } from "@/stores/play";
+import { TableToys } from "./TableToys";
+import { tableLayout, type Presence } from "@/lib/co-op";
 import { COLOR_MAP } from "@/lib/colors";
 
 function beadGeometry() {
@@ -272,7 +274,14 @@ function CameraRig() {
     zooming = useRef(false),
     initialized = useRef(false);
   const goalZoom = useRef(1);
+  const fused = useEditor((s) => s.fused || s.fusing);
+  const movingBox = usePlay((s) => s.draggingTray !== null);
+  const hasBack = usePlay((s) => s.toys.some((t) => t.side === "back"));
   const view = useMemo(() => {
+    const rack = tableLayout(width, height);
+    const front = fused ? 0 : rack.depth + 1.6;
+    const rear = hasBack ? front : 0;
+    const target = new THREE.Vector3(0, 0, (front - rear) / 2);
     const distance = Math.max(width, height) * 1.9;
     const position = new THREE.Vector3(
       ...((mode === "top"
@@ -291,23 +300,26 @@ function CameraRig() {
       .normalize();
     const up = new THREE.Vector3().crossVectors(direction, right).normalize();
     const projectedWidth =
-      Math.abs(right.x) * (width + 2) + Math.abs(right.z) * (height + 2);
+      Math.abs(right.x) * Math.max(width + 2, rack.span) +
+      Math.abs(right.z) * (height + 2 + front + rear);
     const projectedHeight =
-      Math.abs(up.x) * (width + 2) + Math.abs(up.z) * (height + 2) + 2;
+      Math.abs(up.x) * Math.max(width + 2, rack.span) +
+      Math.abs(up.z) * (height + 2 + front + rear) +
+      2;
     // Fit all four corners, including on narrow touch screens.
-    const baseZoom =
-      Math.min(
-        size.width / (projectedWidth + 4),
-        size.height / (projectedHeight + 3),
-      ) * (size.width > 650 ? 1.1 : 1);
-    return { position, baseZoom };
-  }, [mode, width, height, size.width, size.height]);
+    const baseZoom = Math.min(
+      size.width / (projectedWidth + 4),
+      size.height / (projectedHeight + 3),
+    );
+    return { position: position.add(target), baseZoom, target };
+  }, [mode, width, height, size.width, size.height, fused, hasBack]);
   useLayoutEffect(() => {
     goalZoom.current = (view.baseZoom * useEditor.getState().zoom) / 100;
     if (!initialized.current) {
       camera.position.copy(view.position);
       camera.zoom = goalZoom.current;
-      camera.lookAt(0, 0, 0);
+      camera.lookAt(view.target);
+      controls.current?.target.copy(view.target);
       camera.updateProjectionMatrix();
       initialized.current = true;
     }
@@ -324,7 +336,7 @@ function CameraRig() {
     const factor = motion === "full" ? 0.14 : 1;
     if (moving.current) {
       camera.position.lerp(view.position, factor);
-      controls.current?.target.lerp(new THREE.Vector3(), factor);
+      controls.current?.target.lerp(view.target, factor);
       if (camera.position.distanceTo(view.position) < 0.01)
         moving.current = false;
     }
@@ -341,6 +353,7 @@ function CameraRig() {
   });
   return (
     <OrbitControls
+      enabled={!movingBox}
       ref={controls}
       makeDefault
       enableDamping
@@ -412,11 +425,11 @@ function Interaction() {
   const move = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     const i = index(e);
-    usePlay.setState({ hover: i >= 0 ? i : null });
     if (ghost.current) {
       ghost.current.visible =
         i >= 0 &&
         !fused &&
+        useEditor.getState().placement === "classic" &&
         tool !== "hand" &&
         tool !== "grab" &&
         !usePlay.getState().held;
@@ -446,10 +459,15 @@ function Interaction() {
         position={[0, 1.05, 0]}
         visible={!fused}
         onPointerDown={(e) => {
-          if (e.button === 1 || tool === "hand") return;
+          if (
+            !(e.nativeEvent.target instanceof HTMLCanvasElement) ||
+            e.button === 1 ||
+            tool === "hand"
+          )
+            return;
           e.stopPropagation();
           pointers.current.add(e.pointerId);
-          if (pointers.current.size > 1) {
+          if (pointers.current.size > 1 || !e.nativeEvent.isPrimary) {
             painting.current = false;
             useEditor.getState().cancelStroke();
             return;
@@ -458,16 +476,30 @@ function Interaction() {
           if (i < 0) return;
           const play = usePlay.getState();
           if (play.held) {
-            play.place(i);
+            if (e.button === 2) usePlay.setState({ held: null });
+            else if (e.pointerType === "touch") {
+              // Commit on lift so a second finger can turn the gesture into a pinch.
+              usePlay.setState({
+                held: {
+                  ...play.held,
+                  start: {
+                    x: e.clientX,
+                    y: e.clientY,
+                    pointerId: e.pointerId,
+                    dropOnTap: true,
+                  },
+                },
+              });
+            } else if (e.button === 0) play.place(i);
             return;
           }
-          if (tool === "grab") {
+          if (tool === "grab" && e.button !== 2) {
             const bead = useEditor.getState().project.cells[i];
             if (bead)
               play.pick({
                 color: bead,
                 source: i,
-                start: { x: e.clientX, y: e.clientY },
+                start: { x: e.clientX, y: e.clientY, pointerId: e.pointerId },
               });
             return;
           }
@@ -491,7 +523,6 @@ function Interaction() {
           ).releasePointerCapture(e.pointerId);
         }}
         onPointerOut={() => {
-          usePlay.setState({ hover: null });
           if (ghost.current) ghost.current.visible = false;
           invalidate();
         }}
@@ -532,7 +563,7 @@ function SharedPlayInteraction() {
   const width = useEditor((s) => s.project.width),
     height = useEditor((s) => s.project.height);
   const { camera, gl, invalidate } = useThree();
-  const preview = useRef<THREE.Mesh>(null);
+  const preview = useRef<THREE.Group>(null);
   const geometry = useMemo(() => beadGeometry(), []);
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => {
@@ -540,61 +571,100 @@ function SharedPlayInteraction() {
       pointer = new THREE.Vector2(),
       hit = new THREE.Vector3();
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.05);
-    const peg = (e: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect();
+    const sample = (e: PointerEvent) => {
+      const target = document.elementFromPoint(e.clientX, e.clientY);
       if (
-        e.clientX < rect.left ||
-        e.clientX > rect.right ||
-        e.clientY < rect.top ||
-        e.clientY > rect.bottom
+        !target?.closest(".scene-container") ||
+        !gl.domElement.parentElement?.parentElement?.contains(target)
       )
-        return -1;
+        return null;
+      const rect = gl.domElement.getBoundingClientRect();
       pointer.set(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        (-(e.clientY - rect.top) / rect.height) * 2 + 1,
+        (2 * (e.clientX - rect.left)) / rect.width - 1,
+        1 - (2 * (e.clientY - rect.top)) / rect.height,
       );
       ray.setFromCamera(pointer, camera);
-      if (!ray.ray.intersectPlane(plane, hit)) return -1;
+      if (
+        !ray.ray.intersectPlane(plane, hit) ||
+        Math.abs(hit.x) > 150 ||
+        Math.abs(hit.z) > 150
+      )
+        return null;
       const x = Math.floor(hit.x + width / 2),
         y = Math.floor(hit.z + height / 2);
-      return x < 0 || x >= width || y < 0 || y >= height ? -1 : y * width + x;
+      const cell =
+        target === gl.domElement && x >= 0 && x < width && y >= 0 && y < height
+          ? y * width + x
+          : null;
+      return { position: { x: +hit.x.toFixed(2), z: +hit.z.toFixed(2) }, cell };
     };
     const move = (e: PointerEvent) => {
-      if (!usePlay.getState().held) return;
-      const i = peg(e);
-      usePlay.setState({ hover: i < 0 ? null : i });
+      if (!e.isPrimary) return;
+      const point = sample(e),
+        i = point?.cell ?? null;
+      const play = usePlay.getState();
+      if (point || play.position)
+        usePlay.setState({ position: point?.position ?? null, hover: i });
       if (preview.current) {
-        preview.current.visible = i >= 0;
-        if (i >= 0)
+        preview.current.visible = i !== null && !!play.held;
+        if (i !== null)
           preview.current.position.set(
             (i % width) - (width - 1) / 2,
-            1.1,
+            0.85,
             Math.floor(i / width) - (height - 1) / 2,
           );
+        invalidate();
       }
-      invalidate();
     };
     const up = (e: PointerEvent) => {
       const h = usePlay.getState().held;
-      if (!h?.start) return;
-      const i = peg(e);
       if (
-        i >= 0 &&
-        Math.hypot(e.clientX - h.start.x, e.clientY - h.start.y) > 6
+        !h?.start ||
+        (h.start.pointerId !== undefined && e.pointerId !== h.start.pointerId)
       )
+        return;
+      const i = sample(e)?.cell;
+      const moved =
+        Math.hypot(e.clientX - h.start.x, e.clientY - h.start.y) > 6;
+      const overTray = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest("[data-tray]")
+        ?.getAttribute("data-tray");
+      if (i != null && (moved || h.start.dropOnTap))
         usePlay.getState().place(i);
+      else if (moved && h.trayId && overTray === h.trayId)
+        usePlay.setState({ held: null, notice: "Bead returned." });
       else usePlay.setState({ held: { ...h, start: undefined } });
       invalidate();
     };
     const cancel = () => {
-      usePlay.setState({ held: null, hover: null });
+      usePlay.setState({ held: null, hover: null, position: null });
       invalidate();
     };
+    const down = (e: PointerEvent) => {
+      if (!e.isPrimary && e.pointerType === "touch") {
+        const { held } = usePlay.getState();
+        if (held?.start)
+          usePlay.setState({ held: { ...held, start: undefined } });
+        useEditor.getState().cancelStroke();
+      } else move(e);
+    };
+    const leave = (e: PointerEvent) => {
+      if (!e.relatedTarget) {
+        usePlay.setState({ hover: null, position: null });
+        if (preview.current) preview.current.visible = false;
+        invalidate();
+      }
+    };
+    window.addEventListener("pointerout", leave);
     window.addEventListener("pointermove", move);
+    window.addEventListener("pointerdown", down);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", cancel);
     return () => {
       window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerdown", down);
+      window.removeEventListener("pointerout", leave);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", cancel);
     };
@@ -602,15 +672,21 @@ function SharedPlayInteraction() {
   return (
     <>
       {held && (
-        <mesh ref={preview} geometry={geometry} visible={false}>
-          <meshPhysicalMaterial
-            color={COLOR_MAP[held.color].hex}
-            transparent
-            opacity={0.8}
-            roughness={0.25}
-            clearcoat={0.5}
-          />
-        </mesh>
+        <group ref={preview} visible={false}>
+          <mesh geometry={geometry}>
+            <meshPhysicalMaterial
+              color={COLOR_MAP[held.color].hex}
+              transparent
+              opacity={0.8}
+              roughness={0.25}
+              clearcoat={0.5}
+            />
+          </mesh>
+          <mesh position={[0, 0.23, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.49, 0.63, 24]} />
+            <meshBasicMaterial color="#c6e878" depthTest={false} />
+          </mesh>
+        </group>
       )}
       {held?.source !== undefined && (
         <mesh
@@ -625,33 +701,92 @@ function SharedPlayInteraction() {
           <meshBasicMaterial color="#d1f477" />
         </mesh>
       )}
-      {peers
-        .filter((p) => p.cell !== null)
-        .map((p, i) => (
-          <group
-            key={p.id}
-            position={[
-              (p.cell! % width) - (width - 1) / 2,
-              1.3,
-              Math.floor(p.cell! / width) - (height - 1) / 2,
-            ]}
-          >
-            <mesh rotation={[-Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[0.48, 0.61, 24]} />
-              <meshBasicMaterial
-                color={i % 2 ? "#6578cf" : "#ed819d"}
-                depthTest={false}
-              />
-            </mesh>
-            <Html center position={[0, 1, 0]} style={{ pointerEvents: "none" }}>
-              <span className="peer-cursor">
-                {p.name}
-                {p.holding ? " · holding a bead" : ""}
-              </span>
-            </Html>
-          </group>
-        ))}
+      <TableToys geometry={geometry} />
+      {peers.map((peer) => (
+        <PeerCursor
+          key={peer.id}
+          peer={peer}
+          width={width}
+          height={height}
+          geometry={geometry}
+        />
+      ))}
     </>
+  );
+}
+
+function PeerCursor({
+  peer,
+  width,
+  height,
+  geometry,
+}: {
+  peer: Presence;
+  width: number;
+  height: number;
+  geometry: THREE.BufferGeometry;
+}) {
+  const group = useRef<THREE.Group>(null);
+  const goal = useMemo(() => {
+    const point =
+      peer.position ??
+      (peer.cell != null
+        ? {
+            x: (peer.cell % width) - (width - 1) / 2,
+            z: Math.floor(peer.cell / width) - (height - 1) / 2,
+          }
+        : null);
+    return point ? new THREE.Vector3(point.x, 1.22, point.z) : null;
+  }, [peer.position, peer.cell, width, height]);
+  const initialized = useRef(false);
+  const invalidate = useThree((s) => s.invalidate);
+  const motion = useEditor((s) => s.motion);
+  useLayoutEffect(() => {
+    if (!goal) {
+      initialized.current = false;
+      return;
+    }
+    if (!initialized.current) group.current?.position.copy(goal);
+    initialized.current = true;
+    invalidate();
+  }, [goal, invalidate]);
+  useFrame((_, delta) => {
+    if (!group.current || !goal) return;
+    group.current.position.lerp(
+      goal,
+      motion === "full" ? 1 - Math.exp(-18 * Math.min(delta, 0.12)) : 1,
+    );
+    if (group.current.position.distanceToSquared(goal) > 0.001) invalidate();
+  });
+  const tint = `hsl(${parseInt(peer.id.slice(0, 6), 16) % 360}, 57%, 67%)`;
+  if (!goal) return null;
+  return (
+    <group ref={group}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.52, 0.68, 24]} />
+        <meshBasicMaterial color={tint} depthTest={false} />
+      </mesh>
+      {peer.holding && (
+        <mesh geometry={geometry} position={[0, 0.12, 0]}>
+          <meshStandardMaterial color={COLOR_MAP[peer.holding].hex} />
+        </mesh>
+      )}
+      <Html
+        center
+        position={[0, 1.5, 0]}
+        zIndexRange={[4, 3]}
+        style={{ pointerEvents: "none" }}
+      >
+        <span className="peer-cursor" style={{ borderColor: tint }}>
+          {peer.name}
+          {peer.tray
+            ? " · moving box"
+            : peer.holding
+              ? ` · ${COLOR_MAP[peer.holding].name}`
+              : ""}
+        </span>
+      </Html>
+    </group>
   );
 }
 

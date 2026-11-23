@@ -18,9 +18,19 @@ import {
 } from "@/lib/grid";
 import { availableHistory } from "@/lib/co-op";
 import { initialProject } from "@/lib/presets";
+export const interactiveTools = new Set<Tool>([
+  "grab",
+  "eraser",
+  "hand",
+  "select",
+  "eyedropper",
+]);
+
 type EditorState = {
   project: BeadProject;
   tool: Tool;
+  placement: "classic" | "interactive";
+  setPlacement: (method: "classic" | "interactive") => void;
   color: string;
   recent: string[];
   mirror: boolean;
@@ -64,6 +74,7 @@ function changed(project: BeadProject, cells: Cell[]): BeadProject {
 export const useEditor = create<EditorState>((set, get) => ({
   project: initialProject(),
   tool: "pencil",
+  placement: "classic",
   color: "green",
   recent: ["green", "lime", "pink", "white", "black"],
   mirror: false,
@@ -94,7 +105,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       selection: null,
       fused: false,
       fusing: false,
-      tool: "pencil",
+      tool: get().placement === "interactive" ? "grab" : "pencil",
       zoom: 100,
       cameraRevision: get().cameraRevision + 1,
       revision: get().revision + 1,
@@ -108,7 +119,22 @@ export const useEditor = create<EditorState>((set, get) => ({
       },
       revision: s.revision + 1,
     })),
+  setPlacement: (placement) => {
+    if (get().placement === placement) return;
+    get().end();
+    set({
+      placement,
+      selection: null,
+      tool: get().fused
+        ? "hand"
+        : placement === "interactive"
+          ? "grab"
+          : "pencil",
+    });
+  },
   setTool: (tool) => {
+    if (get().placement === "interactive" && !interactiveTools.has(tool))
+      return;
     get().end();
     set({ tool, selection: null });
   },
@@ -129,7 +155,9 @@ export const useEditor = create<EditorState>((set, get) => ({
       index < 0 ||
       index >= s.project.cells.length ||
       s.tool === "hand" ||
-      s.tool === "grab"
+      (!erase &&
+        (s.tool === "grab" ||
+          (s.placement === "interactive" && !interactiveTools.has(s.tool))))
     )
       return;
     s.end();
@@ -177,7 +205,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       color = erase || s.tool === "eraser" ? null : s.color;
     for (const i of indices) {
       cells[i] = color;
-      if (s.mirror)
+      if (s.mirror && s.placement === "classic")
         cells[Math.floor(i / width) * width + (width - 1 - (i % width))] =
           color;
     }

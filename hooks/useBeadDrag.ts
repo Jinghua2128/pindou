@@ -21,7 +21,10 @@ export function useBeadDrag() {
         return;
       usePlay
         .getState()
-        .pick({ color: start.color, start: { x: start.x, y: start.y } });
+        .pick({
+          color: start.color,
+          start: { x: start.x, y: start.y, pointerId: start.pointer },
+        });
       gesture.current = null;
     };
     const end = () => {

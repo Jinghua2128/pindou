@@ -137,63 +137,55 @@ export function CoopControls({ roomId }: { roomId?: string }) {
   const joined = roomId && entryRoom === roomId;
   return (
     <>
-      <div className="coop-bar">
-        <div className="coop-description">
-          <Users size={19} />
-          <div>
-            <strong>
-              {roomId ? "Our little table" : "Better with a little company"}
-            </strong>
-            <span>
-              {roomId
-                ? joined
-                  ? status
-                  : "Choose your name to join"
-                : "Invite a friend. Make something, or make a mess."}
-            </span>
-          </div>
-        </div>
-        {joined && (
-          <div className="room-presence" aria-label="People at the table">
-            <i className={connected ? "online" : ""} />
-            <span>{peers.length + 1} at the table</span>
-            {peers.slice(0, 3).map((p) => (
-              <span className="peer-avatar" key={p.id} title={p.name}>
-                {p.name.slice(0, 1).toUpperCase()}
-              </span>
-            ))}
-          </div>
-        )}
+      {!roomId ? (
         <button
-          className="secondary"
-          onClick={() =>
-            show(roomId ? (joined ? "invite" : "enter") : "create")
-          }
+          className="secondary coop-entry"
+          onClick={() => show("create")}
+          aria-haspopup="dialog"
         >
-          <Users size={16} />
-          {roomId
-            ? joined
-              ? "Invite friend"
-              : "Join table"
-            : "Create co-op room"}
+          <Users size={17} />
+          <span>Better with a little company</span>
         </button>
-        {!roomId && (
-          <button className="secondary" onClick={() => show("join")}>
-            Join a friend
-          </button>
-        )}
-        {joined && <CallPanel roomId={roomId} connected={connected} />}
-        {roomId && (
+      ) : (
+        <div className="coop-bar">
+          <div className="coop-description">
+            <Users size={19} />
+            <div>
+              <strong>Our little table</strong>
+              <span>{joined ? status : "Choose your name to join"}</span>
+            </div>
+          </div>
+          {joined && (
+            <div className="room-presence" aria-label="People at the table">
+              <i className={connected ? "online" : ""} />
+              <span>{peers.length + 1} at the table</span>
+              {peers.slice(0, 3).map((p) => (
+                <span className="peer-avatar" key={p.id} title={p.name}>
+                  {p.name.slice(0, 1).toUpperCase()}
+                </span>
+              ))}
+            </div>
+          )}
           <button
-            className="icon-button"
-            title="Leave with your own copy"
-            aria-label="Leave with your own copy"
-            onClick={leave}
+            className="secondary"
+            onClick={() => show(joined ? "invite" : "enter")}
           >
-            <LogOut size={17} />
+            <Users size={16} />
+            {joined ? "Invite friend" : "Join table"}
           </button>
-        )}
-      </div>
+          {joined && <CallPanel roomId={roomId} connected={connected} />}
+          {roomId && (
+            <button
+              className="icon-button"
+              title="Leave with your own copy"
+              aria-label="Leave with your own copy"
+              onClick={leave}
+            >
+              <LogOut size={17} />
+            </button>
+          )}
+        </div>
+      )}
       {dialog && (
         <Modal
           title={
@@ -247,6 +239,11 @@ export function CoopControls({ roomId }: { roomId?: string }) {
               <button className="primary" disabled={busy} onClick={create}>
                 <Radio size={17} />
                 {busy ? "Setting the table…" : "Open shared table"}
+              </button>
+            )}
+            {dialog === "create" && (
+              <button className="secondary" onClick={() => show("join")}>
+                Join a friend
               </button>
             )}
             {dialog === "enter" && (

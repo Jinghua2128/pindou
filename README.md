@@ -40,12 +40,13 @@ Browser tests use an isolated Chrome profile through Playwright (`channel: 'chro
 - 16×16, 24×24, 29×29, 32×32, and 48×48 boards. The validated logical model supports rectangular boards up to 64×64.
 - Pencil, right-click erase, eraser, eyedropper, connected fill, line, rectangle, mirror, rectangular selection, arrow-key selection movement, clear, undo and redo.
 - Shared co-op rooms: invitation links, live board edits, named peer cursors, movable bead boxes, spills and tidying, reconnection with queued changes, and conflict-aware undo.
-- Grab tool (G) moves and swaps existing beads. Drag from trays or any palette color to a peg, or click to pick up and click to place; Escape puts a bead back. Box handles support dragging and arrow keys.
+- Solo players can switch between Classic painting and Interactive one-bead placement below the board. Co-op opens in Interactive. Three boxes sit in front of the board. **Add box** puts up to three more colors along the far edge. Extra boxes can be put away from the same control. Tap or drag a bead to a peg, tap its box to return it, or press Escape. Choosing a palette color in Interactive stocks the right-hand box when needed. Drag a rim or grip to move a box, or focus its grip and use the arrow keys. A fast swing scatters five beads in the direction of travel. Tidy returns the loose beads and keeps your boxes.
+- Grab (G) moves a bead or swaps occupied pegs. The eraser and right-click remove beads. Co-op shows named pointers, held colors and box movement in shared table coordinates. Entering another maker’s active interaction near a box can spill ten loose beads. The room resolves the scatter once, with a 12-second cooldown. Both makers can pick up loose beads or tidy the table.
 - Drag strokes form one history operation. History stores only changed cells and is capped at 100 operations.
 - Top, isometric and orbitable 3D views, zoom, middle-mouse/space panning, touch painting and two-finger camera gestures.
 - 36 named colors, recent colors, project color quantities and CSV bill of materials.
 - Debounced local autosave, rename, saved-project library, duplication, export/import project JSON, and PNG share-card export.
-- Twelve original templates, category/search filters, guided pattern play, a date-selected daily pattern, and random inspiration.
+- Twelve original templates with enlarged previews, keyword and category filters, device-local bookmarks, and discovery sorted by the number or recency of saved projects on this device. Guided play, daily patterns and random inspiration remain available.
 - Local PNG/JPEG/WEBP conversion using a center-square crop, LAB color matching, selectable board and palette sizes, white-background removal, and contrast adjustment.
 - Stylized fusion, editable finished designs, art/keychain/magnet/frame configurations, SGD estimates, disconnected-section detection, and a downloadable snapshot containing pattern, BOM, configuration and estimate.
 - Motion preferences, optional synthesized sound, keyboard shortcuts, named color controls, visible focus, modal focus containment, and a coordinate-based alternative to mouse placement.
@@ -62,7 +63,7 @@ Browser tests use an isolated Chrome profile through Playwright (`channel: 'chro
 | `/presets` | Original template library and guided play |
 | `/account/projects` | Device-local projects, duplicate, export and delete |
 
-`/create` project URLs are device-local identifiers. Use **Create co-op room → Open shared table → Invite friend** for live collaboration, or export PNG/JSON to take a project to another device.
+`/create` project URLs are device-local identifiers. Use **Better with a little company → Open shared table → Invite friend** for live collaboration, or export PNG/JSON to take a project to another device.
 
 ### Playing with a friend
 
@@ -70,7 +71,7 @@ Keep the server running. On localhost, invitations use the first private LAN IPv
 
 Anyone with the random 192-bit invitation link can edit; there are no accounts, ownership roles or moderation controls in this version. Rooms live in a bounded **single Node process**, expire after 12 hours of inactivity, and disappear on server restart. Each participant also autosaves the artwork locally; exports and “Leave with your own copy” preserve it. Trays are transient room toys, not part of project exports. Pending offline changes remain queued only while that page stays open.
 
-The server applies bounded, schema-validated cell and toy operations atomically, with per-client sequence receipts for idempotent retries. Stale conflicting gestures are rejected with a visible notice, and clients retain newer local changes while reconciling snapshots. Sync polls every 250 ms, uses an 8-second request timeout, and retries after 1.5 seconds. Undo skips an entire gesture when another participant has changed one of its affected cells; it cannot partially undo a bead swap. No room providers or keys are required.
+The server applies bounded, schema-validated cell and toy operations atomically, with per-client sequence receipts for idempotent retries. Stale conflicting gestures are rejected with a visible notice, and clients retain newer local changes while reconciling snapshots. Active tables poll every 250 ms and idle tables every second. Pickup or tray interaction can wake a pending poll. Requests time out after 8 seconds and retry after 1.5 seconds. Undo skips an entire gesture when another participant has changed one of its affected cells; it cannot partially undo a bead swap. No room providers or keys are required.
 
 ## Architecture
 
@@ -134,11 +135,21 @@ Never expose service-role or Stripe secret keys through `NEXT_PUBLIC_*` names or
 
 A private billing/call migration is provided in `supabase/migrations/202609280001_paid_calls.sql`; it has not been applied to a hosted database. The next backend phase should introduce `profiles`, `projects`, `project_versions`, `presets`, `preset_categories`, `bead_colors`, `orders`, `order_status_history`, `pricing_settings`, `inventory`, `favorites`, `achievements`, `user_achievements`, and `daily_challenges`. Use UUID identifiers, versioned logical-grid JSONB, private-by-default project storage, and RLS for owner/admin permissions. Obtain user identity from a validated server session; never trust a client-supplied role. Public project reads must be deliberate. Thumbnails belong in access-controlled Supabase Storage buckets.
 
+### Public template discovery scope
+
+The catalog currently credits PinDou Studio for its originals. Bookmarks and usage-based ordering use this browser’s storage. Public publishing needs authenticated creators, versioned template snapshots, publication timestamps, tag indexes, and per-user likes or favorites with a uniqueness constraint. The existing logical grid can generate previews. A public catalog also needs owner-only writes, a reporting and moderation workflow, and read access limited to published designs. Global popularity and recent-upload views should query those persisted records.
+
 ### Physical-product Stripe phase
 
 Implement authenticated server-side Checkout Sessions only after cloud project persistence and server pricing are in place. Load the owned project and current pricing server-side, compute totals, store an immutable pending order, and create a test-mode Stripe session. Mark an order paid only after signature-verified, idempotent webhook processing. Do not infer payment success from a redirect. Shipping initially targets Singapore. This phase also needs order timelines, authenticated admin tools, production sheets, inventory and pricing management.
 
 ## Deployment
+
+The included `render.yaml` provisions one Node 22 web service in Singapore using Render's 0.5 CPU / 512 MB paid plan. Review the monthly charge in Render before creating it. Automatic redeploys are off because restarting the process closes active shared tables. The build and start commands use Render's HTTPS URL automatically; set `NEXT_PUBLIC_APP_URL` explicitly if adding a custom domain.
+
+[Deploy the studio release on Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FJinghua2128%2Fpindou%2Ftree%2Fcodex%2Feasier-coop-plus-calls)
+
+After deployment, run `PLAYWRIGHT_BASE_URL=https://your-service.onrender.com pnpm test:e2e` to check the live studio and two-player sharing. Paid calls and billing stay disabled until their providers are configured.
 
 For co-op, deploy `pnpm build` + `pnpm start` on one persistent Node.js server behind HTTPS. The room registry is process-local: do not deploy the current room API to stateless/serverless functions or multiple workers/replicas. Those environments require a shared durable store plus cross-worker synchronization before co-op is reliable. The static/local editor can still be hosted using normal Next.js hosting. Changing the origin creates a separate browser-storage namespace. For paid-call setup and current cost estimates, see [Co-op hosting and calls](docs/COOP-HOSTING.md).
 
