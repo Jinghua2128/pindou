@@ -1,29 +1,109 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Search, Shuffle } from "lucide-react";
+import { ArrowRight, Bookmark, Search, Shuffle } from "lucide-react";
 import { Header } from "@/components/ui/Header";
 import { BeadArt } from "@/components/ui/BeadArt";
 import { PRESETS, createProject, type Preset } from "@/lib/presets";
-import { saveProject } from "@/lib/storage";
+import { Modal } from "@/components/ui/Modal";
+import { COLOR_MAP } from "@/lib/colors";
+import { readProjects, saveProject } from "@/lib/storage";
 import { useEditor } from "@/stores/editor";
+const bookmarkKey = (id: string) => `pindou.template.saved.v1.${id}`;
+const keywords = new Map(
+  PRESETS.map((p) => [
+    p.id,
+    [
+      p.name,
+      p.description,
+      p.category,
+      p.difficulty,
+      "PinDou Studio",
+      ...new Set(p.cells.flatMap((c) => (c ? [COLOR_MAP[c].name] : []))),
+    ]
+      .join(" ")
+      .toLowerCase(),
+  ]),
+);
 export function PresetLibrary() {
   const router = useRouter(),
     [category, setCategory] = useState("All"),
     [search, setSearch] = useState(""),
+    [sort, setSort] = useState("featured"),
+    [savedOnly, setSavedOnly] = useState(false),
+    [saved, setSaved] = useState<string[]>([]),
+    [usage, setUsage] = useState<Map<string, { count: number; last: string }>>(
+      new Map(),
+    ),
+    [preview, setPreview] = useState<Preset | null>(null),
     [error, setError] = useState("");
   const categories = ["All", ...new Set(PRESETS.map((p) => p.category))];
+  useEffect(() => {
+    function refresh() {
+      try {
+        setSaved(
+          PRESETS.filter(
+            (p) => localStorage.getItem(bookmarkKey(p.id)) === "1",
+          ).map((p) => p.id),
+        );
+        const stats: typeof usage = new Map();
+        for (const p of readProjects()) {
+          if (!p.presetId || p.id === "pocket-frog-demo") continue;
+          const entry = stats.get(p.presetId) ?? { count: 0, last: "" };
+          stats.set(p.presetId, entry);
+          entry.count++;
+          if (p.updatedAt > entry.last) entry.last = p.updatedAt;
+        }
+        setUsage(stats);
+      } catch {
+        setError(
+          "Device storage is unavailable. You can still browse the catalog.",
+        );
+      }
+    }
+    refresh();
+    window.addEventListener("storage", refresh);
+    return () => window.removeEventListener("storage", refresh);
+  }, []);
+  function bookmark(id: string) {
+    try {
+      const key = bookmarkKey(id);
+      if (localStorage.getItem(key) === "1") {
+        localStorage.removeItem(key);
+        setSaved((current) => current.filter((item) => item !== id));
+      } else {
+        localStorage.setItem(key, "1");
+        setSaved((current) => [...new Set([...current, id])]);
+      }
+    } catch {
+      setError("This browser could not save your bookmark.");
+    }
+  }
+  const query = search.trim().toLowerCase();
+  const words = query.split(/\s+/);
+  const exact = PRESETS.find((p) => p.name.toLowerCase() === query);
   const presets = PRESETS.filter(
     (p) =>
       (category === "All" || p.category === category) &&
-      `${p.name} ${p.description}`.toLowerCase().includes(search.toLowerCase()),
+      (!savedOnly || saved.includes(p.id)) &&
+      (exact
+        ? p.id === exact.id
+        : words.every((word) => keywords.get(p.id)!.includes(word))),
+  ).sort((a, b) =>
+    sort === "most"
+      ? (usage.get(b.id)?.count ?? 0) - (usage.get(a.id)?.count ?? 0)
+      : sort === "recent"
+        ? (usage.get(b.id)?.last ?? "").localeCompare(
+            usage.get(a.id)?.last ?? "",
+          )
+        : 0,
   );
   function open(p: Preset, game = false) {
     const project = createProject(p.size, p, game);
-    useEditor.getState().load(project);
     try {
       saveProject(project);
+      useEditor.getState().load(project);
       router.push(`/create/${project.id}`);
     } catch {
       setError(
@@ -67,6 +147,22 @@ export function PresetLibrary() {
               {c}
             </button>
           ))}
+          <button
+            className={savedOnly ? "active" : ""}
+            aria-pressed={savedOnly}
+            onClick={() => setSavedOnly(!savedOnly)}
+          >
+            Saved ({saved.length})
+          </button>
+          <select
+            aria-label="Sort templates"
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+          >
+            <option value="featured">PinDou picks</option>
+            <option value="most">Most made on this device</option>
+            <option value="recent">Recently edited on this device</option>
+          </select>
           <label className="library-search">
             <Search size={16} />
             <input
@@ -89,11 +185,33 @@ export function PresetLibrary() {
                 className="preset-picture"
                 style={{ background: p.background }}
               >
-                <BeadArt cells={p.cells} width={p.size} name={p.name} />
+                <button
+                  className="preview-template"
+                  aria-label={`Preview ${p.name}`}
+                  onClick={() => setPreview(p)}
+                >
+                  <BeadArt cells={p.cells} width={p.size} name={p.name} />
+                </button>
+                <button
+                  className="bookmark-template"
+                  title={
+                    saved.includes(p.id)
+                      ? "Remove bookmark"
+                      : "Save on this device"
+                  }
+                  aria-label={`Save ${p.name} on this device`}
+                  aria-pressed={saved.includes(p.id)}
+                  onClick={() => bookmark(p.id)}
+                >
+                  <Bookmark
+                    size={17}
+                    fill={saved.includes(p.id) ? "currentColor" : "none"}
+                  />
+                </button>
               </div>
               <div className="preset-info">
                 <h2>{p.name}</h2>
-                <p>{p.description}</p>
+                <p>PinDou Studio · {p.category}</p>
                 <div className="preset-meta">
                   <span>{p.difficulty}</span>
                   <span>{p.cells.filter(Boolean).length} beads</span>
@@ -122,12 +240,43 @@ export function PresetLibrary() {
               onClick={() => {
                 setCategory("All");
                 setSearch("");
+                setSavedOnly(false);
               }}
             >
               Show every template
             </button>
           </div>
         ) : null}
+        {preview && (
+          <Modal title={preview.name} onClose={() => setPreview(null)}>
+            <div
+              className="preset-picture template-detail"
+              style={{ background: preview.background }}
+            >
+              <BeadArt
+                cells={preview.cells}
+                width={preview.size}
+                name={preview.name}
+              />
+            </div>
+            <p className="modal-description">
+              {preview.description} · PinDou Studio
+            </p>
+            <div className="dialog-actions">
+              <button className="secondary" onClick={() => open(preview, true)}>
+                Follow pattern
+              </button>
+              <button className="primary" onClick={() => open(preview)}>
+                Make it yours <ArrowRight size={14} />
+              </button>
+            </div>
+            {error && (
+              <p role="alert" className="error-copy">
+                {error}
+              </p>
+            )}
+          </Modal>
+        )}
         <footer className="studio-footer">
           <span>Every template is original. Every remix is yours.</span>
           <Link href="/create">

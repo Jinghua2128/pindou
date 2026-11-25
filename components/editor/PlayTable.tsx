@@ -1,259 +1,198 @@
 "use client";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type PointerEvent,
-} from "react";
-import { GripHorizontal, RotateCcw, Sparkles, X } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { PackagePlus, RotateCcw, X } from "lucide-react";
 import { usePlay } from "@/stores/play";
 import { useEditor } from "@/stores/editor";
-import { COLOR_MAP } from "@/lib/colors";
-import type { Toy } from "@/lib/co-op";
+import { Modal } from "@/components/ui/Modal";
+import { MAX_BOXES } from "@/lib/co-op";
+import { COLORS, COLOR_MAP } from "@/lib/colors";
 
-export function PlayTable() {
+export function PlayTable({ shared }: { shared: boolean }) {
+  const held = usePlay((s) => s.held),
+    notice = usePlay((s) => s.notice),
+    placement = useEditor((s) => s.placement);
+  const [boxesOpen, setBoxesOpen] = useState(false),
+    [boxError, setBoxError] = useState("");
   const toys = usePlay((s) => s.toys),
-    held = usePlay((s) => s.held),
-    notice = usePlay((s) => s.notice);
+    boxes = toys.filter((t) => t.kind === "tray");
   const fused = useEditor((s) => s.fused || s.fusing);
-  const area = useRef<HTMLDivElement>(null),
-    cursor = useRef<HTMLDivElement>(null);
-  const drag = useRef<{
-    id: string;
-    startX: number;
-    startY: number;
-    x: number;
-    y: number;
-  } | null>(null);
-  const [announcement, setAnnouncement] = useState("");
+  const cursor = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const move = (e: globalThis.PointerEvent) => {
-      if (cursor.current) {
-        cursor.current.style.transform = `translate3d(${e.clientX + 13}px,${e.clientY - 14}px,0)`;
-        cursor.current.style.opacity = "1";
-      }
+    const move = (e: PointerEvent) => {
+      if (cursor.current)
+        cursor.current.style.transform = `translate3d(${e.clientX + 8}px,${e.clientY - 20}px,0)`;
     };
+    const cancel = () =>
+      usePlay.setState({
+        held: null,
+        hover: null,
+        draggingTray: null,
+        position: null,
+      });
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") usePlay.setState({ held: null });
-    };
-    const cancel = () => {
-      drag.current = null;
-      usePlay.setState({ draggingTray: false });
-      usePlay.setState({ held: null, hover: null });
+      if (e.key === "Escape") cancel();
     };
     window.addEventListener("pointermove", move);
+    window.addEventListener("pointerdown", move);
     window.addEventListener("keydown", key);
     window.addEventListener("blur", cancel);
     return () => {
       window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerdown", move);
       window.removeEventListener("keydown", key);
       window.removeEventListener("blur", cancel);
-      usePlay.setState({ draggingTray: false });
+      cancel();
     };
   }, []);
-  useEffect(() => {
-    const timer = setTimeout(() => setAnnouncement(notice), 0);
-    const clear = setTimeout(() => setAnnouncement(""), 4000);
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(clear);
-    };
-  }, [notice]);
-  function start(e: PointerEvent, toy: Toy) {
-    if (e.button !== 0) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = {
-      id: toy.id,
-      startX: e.clientX,
-      startY: e.clientY,
-      x: toy.x,
-      y: toy.y,
-    };
-    usePlay.setState({ draggingTray: true });
-  }
-  function move(e: PointerEvent) {
-    if (!drag.current || !area.current) return;
-    const rect = area.current.getBoundingClientRect(),
-      d = drag.current;
-    usePlay
-      .getState()
-      .moveToy(
-        d.id,
-        d.x + ((e.clientX - d.startX) / rect.width) * 100,
-        d.y + ((e.clientY - d.startY) / rect.height) * 100,
-      );
-  }
-  function end() {
-    drag.current = null;
-    usePlay.setState({ draggingTray: false });
-  }
-  function take(e: PointerEvent, color: string, looseId?: string) {
-    if (e.button !== 0) return;
-    usePlay
-      .getState()
-      .pick({ color, looseId, start: { x: e.clientX, y: e.clientY } });
-  }
   return (
-    <section className="play-table" aria-label="Playful bead table">
-      <div className="play-table-heading">
-        <div>
-          <span className="eyebrow">A LITTLE ROOM TO PLAY</span>
-          <h2>Good company. Happy accidents.</h2>
-          <p>Drag a box. Spill some beads. Take one to the board.</p>
-        </div>
-        <button className="secondary" onClick={() => usePlay.getState().tidy()}>
-          <RotateCcw size={15} />
-          Tidy table
-        </button>
-      </div>
-      <div className="toy-surface" ref={area}>
-        <span className="table-scribble">
-          a little mess
-          <br />
-          is part of the making ↗
-        </span>
-        {toys.map((toy) =>
-          toy.kind === "tray" ? (
-            <div
-              key={toy.id}
-              className="bead-tray"
-              data-tray={toy.id}
-              style={
-                {
-                  left: `${toy.x}%`,
-                  top: `${toy.y}%`,
-                  "--tilt": `${toy.angle}deg`,
-                  "--bead": COLOR_MAP[toy.color].hex,
-                } as CSSProperties
-              }
-            >
-              <button
-                className="tray-handle"
-                aria-label={`Move ${COLOR_MAP[toy.color].name} box`}
-                onPointerDown={(e) => start(e, toy)}
-                onPointerMove={move}
-                onPointerUp={end}
-                onPointerCancel={end}
-                onLostPointerCapture={end}
-                onKeyDown={(e) => {
-                  if (
-                    [
-                      "ArrowLeft",
-                      "ArrowRight",
-                      "ArrowUp",
-                      "ArrowDown",
-                    ].includes(e.key)
-                  ) {
-                    e.preventDefault();
-                    usePlay
-                      .getState()
-                      .moveToy(
-                        toy.id,
-                        toy.x +
-                          (e.key === "ArrowLeft"
-                            ? -3
-                            : e.key === "ArrowRight"
-                              ? 3
-                              : 0),
-                        toy.y +
-                          (e.key === "ArrowUp"
-                            ? -5
-                            : e.key === "ArrowDown"
-                              ? 5
-                              : 0),
-                      );
-                  }
-                }}
-              >
-                <GripHorizontal size={18} />
-                <span>{COLOR_MAP[toy.color].name}</span>
-              </button>
-              <button
-                className="tray-beads"
-                aria-label={`Take ${COLOR_MAP[toy.color].name} bead`}
-                disabled={fused}
-                onPointerDown={(e) => take(e, toy.color)}
-                onClick={(e) => {
-                  if (e.detail === 0)
-                    usePlay.getState().pick({ color: toy.color });
-                }}
-              >
-                {Array.from({ length: 12 }, (_, i) => (
-                  <i
-                    className="physical-bead"
-                    key={i}
-                    style={{ rotate: `${i * 17}deg` }}
-                  />
-                ))}
-              </button>
-              <button
-                className="spill-button"
-                aria-label={`Spill ${COLOR_MAP[toy.color].name} box`}
-                onClick={() => usePlay.getState().spill(toy.id)}
-              >
-                <Sparkles size={12} /> Oops, spill!
-              </button>
-            </div>
-          ) : (
+    <div className="table-controls" aria-label="Craft table controls">
+      {!shared && (
+        <div
+          className="placement-switch"
+          role="group"
+          aria-label="Bead placement"
+        >
+          {(["classic", "interactive"] as const).map((method) => (
             <button
-              key={toy.id}
-              className={`loose-bead physical-bead ${held?.looseId === toy.id ? "is-held" : ""}`}
-              aria-label={`Pick up spilled ${COLOR_MAP[toy.color].name} bead`}
-              disabled={fused}
-              style={
-                {
-                  left: `${toy.x}%`,
-                  top: `${toy.y}%`,
-                  rotate: `${toy.angle}deg`,
-                  "--bead": COLOR_MAP[toy.color].hex,
-                } as CSSProperties
-              }
-              onPointerDown={(e) => take(e, toy.color, toy.id)}
-              onClick={(e) => {
-                if (e.detail === 0)
-                  usePlay
-                    .getState()
-                    .pick({ color: toy.color, looseId: toy.id });
+              key={method}
+              aria-pressed={placement === method}
+              onClick={() => {
+                if (method === placement) return;
+                usePlay.setState({ held: null, hover: null, notice: "" });
+                useEditor.getState().setPlacement(method);
+                try {
+                  localStorage.setItem("pindou.placement", method);
+                } catch {}
               }}
-            />
-          ),
-        )}
-      </div>
-      <div className={`pickup-status ${held ? "has-bead" : ""}`} role="status">
+            >
+              {method === "classic" ? "Classic" : "Interactive"}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="pickup-status" role="status">
         {held ? (
           <>
             <i
               className="physical-bead"
               style={{ "--bead": COLOR_MAP[held.color].hex } as CSSProperties}
             />
-            <span>
-              Holding {COLOR_MAP[held.color].name}. Drop or tap a peg to place
-              it.
-            </span>
+            Holding {COLOR_MAP[held.color].name}
             <button
               aria-label="Put bead back"
+              title="Put bead back"
               onClick={() => usePlay.setState({ held: null })}
             >
-              <X size={16} />
+              <X size={15} />
             </button>
           </>
         ) : (
-          <span>
-            {announcement ||
-              "Tip: use Grab bead (G) to move a bead. Drop onto another bead to swap them."}
-          </span>
+          notice ||
+          (placement === "interactive"
+            ? "Take a bead from a box, then tap a peg."
+            : "Click or drag to paint.")
         )}
       </div>
-      {held && (
-        <div ref={cursor} className="held-bead-cursor" aria-hidden="true">
+      <div className="box-actions">
+        <button
+          className="add-box"
+          aria-haspopup="dialog"
+          disabled={fused}
+          onClick={() => {
+            setBoxError("");
+            setBoxesOpen(true);
+          }}
+        >
+          <PackagePlus size={16} />
+          <span>Add box</span>
+        </button>
+        <button
+          className="tidy-table"
+          title="Tidy table"
+          aria-label="Tidy table"
+          onClick={() => usePlay.getState().tidy()}
+        >
+          <RotateCcw size={15} />
+          <span>Tidy</span>
+        </button>
+      </div>
+      {boxesOpen && (
+        <Modal title="Bead boxes" onClose={() => setBoxesOpen(false)}>
+          <div className="box-inventory">
+            <div className="box-inventory-heading">
+              <h3>On the table</h3>
+              <span>
+                {boxes.length} / {MAX_BOXES}
+              </span>
+            </div>
+            <p>
+              Drag a box by its rim or grip. Swing it quickly to spill beads.
+            </p>
+            <div className="box-chips">
+              {boxes.map((t) => (
+                <span key={t.id} className="box-chip">
+                  <i style={{ background: COLOR_MAP[t.color].hex }} />
+                  {COLOR_MAP[t.color].name}
+                  {t.side && (
+                    <button
+                      aria-label={`Put away ${COLOR_MAP[t.color].name} box`}
+                      onClick={() => {
+                        usePlay.getState().putAway(t.id);
+                        setBoxError("");
+                      }}
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+            {boxes.length < MAX_BOXES ? (
+              <>
+                <h3>Add a color</h3>
+                <div className="box-colors">
+                  {COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      aria-label={`Add ${c.name} box`}
+                      title={c.name}
+                      onClick={() => {
+                        if (usePlay.getState().addBox(c.id))
+                          setBoxesOpen(false);
+                        else
+                          setBoxError(
+                            "Tidy the table to make room for a new box.",
+                          );
+                      }}
+                    >
+                      <i
+                        className="bead-swatch"
+                        style={{ "--bead-color": c.hex } as CSSProperties}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p>Put away an extra box to add another color.</p>
+            )}
+            {boxError && <p role="alert">{boxError}</p>}
+          </div>
+        </Modal>
+      )}
+      <div
+        ref={cursor}
+        className="held-bead-cursor"
+        aria-hidden="true"
+        hidden={!held}
+      >
+        {held && (
           <i
             className="physical-bead"
             style={{ "--bead": COLOR_MAP[held.color].hex } as CSSProperties}
           />
-          <span>drop me</span>
-        </div>
-      )}
-    </section>
+        )}
+      </div>
+    </div>
   );
 }

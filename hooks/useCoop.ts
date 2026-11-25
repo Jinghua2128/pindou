@@ -2,13 +2,13 @@
 import { newId } from "@/lib/id";
 import { useEffect } from "react";
 import { useEditor } from "@/stores/editor";
-import { usePlay } from "@/stores/play";
+import { beadAvailable, usePlay } from "@/stores/play";
 import { diff } from "@/lib/grid";
 import {
   applyOperation,
   toyDiff,
   type Operation,
-  type RoomSnapshot,
+  type RoomSyncResponse,
 } from "@/lib/co-op";
 
 export function useCoop(roomId: string | undefined, ready: boolean) {
@@ -28,13 +28,18 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
     let baseProject = useEditor.getState().project,
       baseToys = usePlay.getState().toys;
     let pending: Operation[] = [];
-    let timer: ReturnType<typeof setTimeout>;
+    let version: number | undefined;
+    let authoritative = { project: baseProject, toys: baseToys };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastRequest = 0;
     const controller = new AbortController();
     usePlay.setState({
       status: "Connecting…",
       hydrated: false,
       connected: false,
       held: null,
+      position: null,
+      draggingTray: null,
       playerName: name,
       peers: [],
     });
@@ -59,6 +64,7 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
     }
     const editing = () => !!useEditor.getState().strokeBefore;
     async function sync() {
+      timer = undefined;
       if (
         !alive ||
         (initialized && useEditor.getState().project.id !== baseProject.id)
@@ -69,6 +75,7 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
         return;
       }
       collect();
+      lastRequest = performance.now();
       const sent = pending.slice(0, 1),
         play = usePlay.getState();
       try {
@@ -84,9 +91,14 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
               id: peerId,
               name: usePlay.getState().playerName,
               cell: play.hover,
+              position: play.position,
+              tray: play.draggingTray,
+              looseId: play.held?.looseId,
+              source: play.held?.source,
               holding: play.held?.color ?? null,
             },
             operations: sent,
+            since: version,
           }),
         });
         if (!alive) return;
@@ -99,16 +111,19 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
           if ([400, 404, 410].includes(response.status)) return;
           throw new Error("Connection interrupted");
         }
-        const snapshot: RoomSnapshot = await response.json();
+        const snapshot: RoomSyncResponse = await response.json();
         // Never replace a half-finished brush stroke. Tray drags can stream live.
         while (alive && editing())
           await new Promise((resolve) => setTimeout(resolve, 50));
         if (!alive) return;
         if (initialized && useEditor.getState().project.id !== baseProject.id)
           return;
-        collect();
         pending = pending.filter((op) => !sent.some((s) => s.seq === op.seq));
-        let merged = { project: snapshot.project, toys: snapshot.toys };
+        collect();
+        version = snapshot.version;
+        if ("project" in snapshot)
+          authoritative = { project: snapshot.project, toys: snapshot.toys };
+        let merged = authoritative;
         for (const op of pending)
           merged =
             applyOperation(merged.project, merged.toys, op, false) ?? merged;
@@ -126,6 +141,9 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
         }
         baseProject = merged.project;
         baseToys = merged.toys;
+        const held = usePlay.getState().held;
+        const unavailable =
+          held && !beadAvailable(held, merged.project.cells, merged.toys);
         const conflict = sent.some((op) => snapshot.rejected.includes(op.seq));
         usePlay.setState({
           toys: merged.toys,
@@ -135,6 +153,12 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
           status: pending.length
             ? "Sharing your changes…"
             : "Live · everyone is in sync",
+          ...(unavailable
+            ? {
+                held: null,
+                notice: "That bead was moved. Pick another from the table.",
+              }
+            : {}),
           ...(conflict
             ? {
                 notice:
@@ -142,7 +166,17 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
               }
             : {}),
         });
-        timer = setTimeout(sync, 250);
+        const latest = usePlay.getState();
+        const active =
+          pending.length ||
+          latest.position ||
+          latest.held ||
+          latest.draggingTray ||
+          latest.peers.some((p) => p.position);
+        const changedGrip =
+          play.held?.color !== latest.held?.color ||
+          play.draggingTray !== latest.draggingTray;
+        timer = setTimeout(sync, changedGrip ? 125 : active ? 250 : 1000);
       } catch {
         if (!alive) return;
         usePlay.setState({
@@ -152,13 +186,31 @@ export function useCoop(roomId: string | undefined, ready: boolean) {
         timer = setTimeout(sync, 1500);
       }
     }
+    // Wake an idle poll on pickup or table entry. Pointer motion itself never sends a request.
+    const unsubscribe = usePlay.subscribe((s, prev) => {
+      if (!timer || !s.connected) return;
+      if (
+        s.held?.color === prev.held?.color &&
+        s.draggingTray === prev.draggingTray &&
+        Boolean(s.position) === Boolean(prev.position)
+      )
+        return;
+      clearTimeout(timer);
+      timer = setTimeout(
+        sync,
+        Math.max(0, 125 - (performance.now() - lastRequest)),
+      );
+    });
     void sync();
     return () => {
       alive = false;
+      unsubscribe();
       clearTimeout(timer);
       controller.abort();
       usePlay.setState({
         held: null,
+        position: null,
+        draggingTray: null,
         peers: [],
         connected: false,
         hydrated: false,
