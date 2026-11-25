@@ -52,6 +52,7 @@ test("two independent makers share beads, trays, spills, undo and reconnect", as
   await page
     .getByRole("button", { name: "Start creating", exact: true })
     .click();
+  await expect(page).toHaveURL(/\/create\//);
   await page
     .getByRole("button", { name: "Better with a little company", exact: true })
     .click();

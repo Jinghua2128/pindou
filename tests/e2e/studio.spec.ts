@@ -162,6 +162,7 @@ test("storage failures stay visible and a new project remains editable", async (
   await page
     .getByRole("button", { name: "Start creating", exact: true })
     .click();
+  await expect(page).toHaveURL(/\/create\//);
   await expect(
     page.getByRole("button", { name: "Unsaved but editable" }),
   ).toBeVisible();
