@@ -99,7 +99,10 @@ export async function POST(request: Request) {
         cancel_url: `${origin()}/account/plus`,
         client_reference_id: user.id,
         metadata: { pindou_price: price.id },
-        subscription_data: { metadata: { user_id: user.id } },
+        subscription_data: {
+          billing_mode: { type: "flexible" },
+          metadata: { user_id: user.id },
+        },
       },
       {
         idempotencyKey: `pindou-checkout-${user.id}-${price.id}-${Math.floor(Date.now() / 600000)}`,

@@ -7,6 +7,7 @@ import { invitationPath } from "@/lib/invitations";
 type Status = {
   configured: boolean;
   active: boolean;
+  testMode?: boolean;
   email?: string;
   remaining?: number;
   pricing?: { amount: number; currency: string };
@@ -18,6 +19,7 @@ export default function PlusPage() {
     [sent, setSent] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    [confirming, setConfirming] = useState(false),
     [back, setBack] = useState("/");
   const refresh = useCallback(async () => {
     try {
@@ -31,11 +33,16 @@ export default function PlusPage() {
       const data = await r.json();
       if (!r.ok) throw new Error(data.error);
       setStatus(data);
+      if (data.active) setConfirming(false);
     } catch (e) {
       setError((e as Error).message);
     }
   }, []);
   useEffect(() => {
+    setConfirming(
+      new URLSearchParams(window.location.search).get("checkout") ===
+        "complete",
+    );
     void refresh();
     try {
       const path = invitationPath(
@@ -55,6 +62,16 @@ export default function PlusPage() {
     });
     return () => data.subscription.unsubscribe();
   }, [refresh]);
+  useEffect(() => {
+    if (!confirming || !status?.configured || !status.email || status.active)
+      return;
+    const poll = setInterval(() => void refresh(), 3000);
+    const timeout = setTimeout(() => setConfirming(false), 60000);
+    return () => {
+      clearInterval(poll);
+      clearTimeout(timeout);
+    };
+  }, [confirming, status?.configured, status?.email, status?.active, refresh]);
   async function login() {
     setBusy(true);
     setError("");
@@ -128,6 +145,11 @@ export default function PlusPage() {
             <small>/ month · renews until canceled</small>
           </p>
         )}
+        {status?.testMode && (
+          <p className="call-note">
+            Test payments only — use a Stripe test card.
+          </p>
+        )}
         {!status ? (
           <p>Checking availability…</p>
         ) : !status.configured ? (
@@ -192,6 +214,10 @@ export default function PlusPage() {
               <p className="call-note">
                 Plus is active. {status.remaining} hosted sessions remain this
                 month.
+              </p>
+            ) : confirming ? (
+              <p className="call-note" role="status">
+                Confirming your subscription…
               </p>
             ) : (
               <button

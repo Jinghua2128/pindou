@@ -1,6 +1,6 @@
 # PinDou co-op and paid calls
 
-Prepared 29 September 2026. Prices below are estimates in **USD**, except the explicitly marked Singapore Stripe example. No hosting, payment account or call service has been purchased or activated.
+Updated 25 November 2026. The studio is live on Render; paid calls still require provider credentials and end-to-end validation. Infrastructure estimates below are in **USD**. Plus is priced in **SGD**.
 
 ## What works and what needs setup
 
@@ -35,13 +35,13 @@ For two friends connected for 30 minutes: 60 participant-minutes; after the free
 
 These are calculated examples assuming no other usage on the Daily account. [Daily pricing](https://www.daily.co/pricing/video-sdk/) has graduated discounts above 100,000 minutes. The free allowance is not a spending cap; configure billing alerts and monitor usage.
 
-## Proposed Plus allowance and price
+## Plus allowance and price
 
 The implementation starts with a bounded beta allowance: **5 hosted sessions per UTC calendar month**, **30 minutes per session**, **4 participants maximum including the host**, and **one concurrent hosted call per subscriber**. Friends need no subscription or account. Rejoining an unexpired call consumes no extra session. The timer starts when the server reserves the session, not when the last person arrives. Closing a window does not reset it. A provider failure reserves that same session for retry; an abandoned failed reservation can consume one allowance.
 
-This gives a maximum of 600 participant-minutes per host per month, or $2.40 in video usage before Daily's free allowance. It is a proposed beta product policy, not a requirement from the user; change both the SQL migration and `lib/call-policy.ts` before launch if you choose different limits. Prices are read from the configured Stripe Price rather than hard-coded in the interface.
+This gives a maximum of 600 participant-minutes per host per month, or $2.40 in video usage before Daily's free allowance. The current allowance is retained for launch; changes require updating both the SQL migration and `lib/call-policy.ts`. Prices are read from the configured Stripe Price rather than hard-coded in the interface.
 
-A possible launch price is **S$9.90/month**. For a Singapore account and domestic card, Stripe Payments currently charges 3.4% + S$0.50 and Billing adds 0.7%: approximately **S$0.91** per renewal, leaving **S$8.99** before infrastructure, tax, refunds and other costs. Hosting/call figures are USD, so convert at your actual settlement rate when evaluating margin. International cards and currency conversion can add fees. This is a pricing suggestion, not an activated plan.
+The user selected **S$4.90/month** with paid hosts and free guests. The `pindou sandbox` account now contains the PinDou Plus product and its SGD 490-cent monthly Price. This is test mode only. The user confirmed they do not currently collect sales tax, VAT or GST; automatic tax is not enabled. Confirm the applicable tax setup before live sales. Hosting/call figures are USD; account for actual payment fees and settlement conversion when evaluating margin.
 
 Sources: [Stripe Singapore Payments](https://stripe.com/en-sg/pricing), [Stripe Billing](https://stripe.com/en-sg/billing/pricing).
 
@@ -51,10 +51,20 @@ Sources: [Stripe Singapore Payments](https://stripe.com/en-sg/pricing), [Stripe 
 2. Apply `supabase/migrations/202609280001_paid_calls.sql` to your Supabase project. It creates private billing/subscription/call tables and a server-only reservation function. Browser roles have no table privileges. Reservations use transaction locks so simultaneous requests cannot exceed the allowance or create overlapping sessions.
 3. Enable Supabase email sign-in. Change the email template to include `{{ .Token }}` for the code-entry flow. Set the public Site URL and configure a transactional SMTP provider for delivery to real users. See [Supabase email OTP](https://supabase.com/docs/guides/auth/auth-email-passwordless).
 4. Create a fixed recurring monthly Stripe Price, no trial, quantity one. Set `STRIPE_PLUS_PRICE_ID`. Enable Stripe's customer portal for payment updates and subscription cancellation; do not enable plan/quantity switching in the portal for this single-plan beta.
-5. Register `/api/billing/webhook` for `customer.subscription.created`, `customer.subscription.updated` and `customer.subscription.deleted`. Use its signing secret. Only a verified webhook writes entitlement data; it retrieves the current Stripe subscription and applies updates through an atomic database function that rejects older events and prevents canceled subscriptions from reactivating. Payment failures suspend access when status ceases to be `active`. Cancellation at period end retains access until that period ends.
+5. Register `/api/billing/webhook` for `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `invoice.paid`, `invoice.payment_failed` and `invoice.payment_action_required`. Match its API version to the installed SDK (`2026-08-26.dahlia` for Stripe 22.6.2). Use its signing secret. Only a verified webhook writes entitlement data; it retrieves the current subscription and latest invoice and applies updates through an atomic database function that rejects older events and prevents canceled subscriptions from reactivating. Hosting requires an active subscription, the matching price, a paid latest invoice and a future period end. Cancellation at period end retains access until that period ends.
 6. Put the values from `.env.example` in your hosting provider's environment settings. Only the Supabase URL, anon key and public app URL use `NEXT_PUBLIC_`. Stripe secret, webhook secret, Price ID, Supabase service role key and Daily API key stay server-side. Never paste secrets into committed source or a chat.
 7. Deploy one Node process/instance. Build: `corepack enable && pnpm install --frozen-lockfile && pnpm build`. Start: `pnpm exec next start --hostname 0.0.0.0 --port $PORT`. Set `NEXT_PUBLIC_APP_URL` to the deployed HTTPS origin before building. Public env values are compiled into the client.
 8. Test email sign-in, successful and declined test payments, duplicate Checkout clicks, portal cancellation, webhook retries, guest joins with no auth, voice rooms rejecting video, camera/mic permission denial, five-session exhaustion, four-participant capacity, and forced disconnect at 30 minutes. Verify audio/video with two physical devices. Confirm Daily and Stripe dashboards match the expected usage before switching to live Stripe keys and Price ID.
+
+## Stripe implementation review — 25 November 2026
+
+Stripe's implementation planner selected hosted Checkout, flat monthly pricing paid up front, and the Customer Portal. Retain the existing Customers API; Accounts v2 migration is unnecessary for this single-plan integration. Checkout explicitly uses flexible billing. The sandbox portal permits payment-method updates, invoice history and cancellation at period end; plan and quantity changes are disabled.
+
+The review added payment and Checkout lifecycle reconciliation, a paid-invoice check before granting access, a visible test-payment label, and a one-minute automatic status refresh after Checkout. The return URL itself grants no access. Existing customer/session reuse, signature verification, server-only database access, transactional call allowances and free guest joins remain in place.
+
+Before live activation, configure Stripe's standard payment recovery and failed-payment emails in the Dashboard, set up production email OTP delivery, and complete the test flow above. Refunds and disputes currently require operator review in Stripe; a refund alone does not cancel a subscription. Cancel the subscription explicitly when access should end. No real payment or media call has been verified yet.
+
+References: [hosted subscriptions](https://docs.stripe.com/billing/subscriptions/build-subscriptions?payment-ui=checkout&ui=stripe-hosted), [subscription webhooks](https://docs.stripe.com/billing/subscriptions/webhooks), [customer portal](https://docs.stripe.com/customer-management/integrate-customer-portal).
 
 ## Operational limits to know
 

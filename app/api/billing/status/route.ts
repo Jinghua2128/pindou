@@ -33,6 +33,7 @@ export async function GET(request: Request) {
       return json({
         configured: true,
         active: false,
+        testMode: !price.livemode,
         pricing,
         policy: CALL_POLICY,
       });
@@ -50,6 +51,7 @@ export async function GET(request: Request) {
     return json({
       configured: true,
       active,
+      testMode: !price.livemode,
       email: user.email,
       remaining: Math.max(0, CALL_POLICY.sessionsPerMonth - (count ?? 0)),
       pricing,
